@@ -1,0 +1,3 @@
+<APIProxy name="oauth">
+  <Description>Dispenses an OAuth v2.0 token.</Description>
+</APIProxy>
