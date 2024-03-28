@@ -1,4 +1,5 @@
-<OAuthV2 name="GenerateAccessToken">
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<OAuthV2 async="false" continueOnError="false" enabled="true" name="OAuthV2-GenerateAccessToken">
   <Operation>GenerateAccessToken</Operation>
   <!-- Expire in 3600000 msec or 1 hour -->
   <ExpiresIn>3600000</ExpiresIn>
@@ -7,8 +8,7 @@
   </SupportedGrantTypes>
   <GrantType>request.queryparam.grant_type</GrantType>
    <Attributes>
-    <!-- TODO: Retrieve UUID from Firebase ID token -->
-    <Attribute name='firebase_uuid' display='true'>12345</Attribute>
+    <Attribute name='climateiq_user_id' display='true'>12345</Attribute>
   </Attributes>
   <GenerateResponse/>
 </OAuthV2>

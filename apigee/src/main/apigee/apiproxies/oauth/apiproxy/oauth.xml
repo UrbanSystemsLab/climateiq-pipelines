@@ -1,3 +1,5 @@
-<APIProxy name="oauth">
-  <Description>Dispenses an OAuth v2.0 token.</Description>
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<APIProxy revision="1" name="oauth">
+  <DisplayName>OAuthV2</DisplayName>
+  <Description>Dispenses an OAuth 2.0 token.</Description>
 </APIProxy>

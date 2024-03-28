@@ -1,17 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <ProxyEndpoint revision="1" name="default">
-  <Flows>
-    <Flow name="default">
-      <Request>
-	      <Step>
-          <Name>OAuthV2-GenerateAccessToken</Name>
-        </Step>
-      </Request>
-    </Flow>
-  </Flows>
-
   <HTTPProxyConnection>
-    <BasePath>/oauth/token</BasePath>
+      <BasePath>/blog</BasePath>
     <!-- Listen only on the HTTPS endpoint -->
     <VirtualHost>secure</VirtualHost>
   </HTTPProxyConnection>
