@@ -5,5 +5,10 @@
     </Step>
     <Step>
         <Name>OAuthV2-VerifyAccessToken</Name>
+        <Condition>access_token != null</Condition>
+    </Step>
+    <Step>
+        <Name>VA-VerifyAPIKey</Name>
+        <Condition>access_token is null</Condition>
     </Step>
 </SharedFlow>

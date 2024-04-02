@@ -11,6 +11,7 @@
       <Request>
           <Step>
               <Name>AM-UserIdHeader</Name>
+              <Condition>accesstoken.climateiq_user_id != null</Condition>
           </Step>
       </Request>
   </PostFlow>
