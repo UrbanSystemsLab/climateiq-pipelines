@@ -2,8 +2,8 @@
 <APIProxy revision="1" name="data">
   <DisplayName>Data</DisplayName>
   <Description>Returns ClimateIQ map data.</Description>
-  <CreatedAt>1712244132158</CreatedAt>
-  <LastModifiedAt>1712244176761</LastModifiedAt>
+  <CreatedAt>1712263358987</CreatedAt>
+  <LastModifiedAt>1712263358987</LastModifiedAt>
   <BasePaths>/data</BasePaths>
   <Policies>
     <Policy>FC-Authentication</Policy>

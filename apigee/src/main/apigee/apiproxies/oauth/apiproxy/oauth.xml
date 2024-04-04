@@ -2,8 +2,8 @@
 <APIProxy revision="1" name="oauth">
   <DisplayName>OAuthV2</DisplayName>
   <Description>Dispenses an OAuth 2.0 token.</Description>
-  <CreatedAt>1712244329201</CreatedAt>
-  <LastModifiedAt>1712244425341</LastModifiedAt>
+  <CreatedAt>1712260622518</CreatedAt>
+  <LastModifiedAt>1712260622518</LastModifiedAt>
   <BasePaths>/oauth/token</BasePaths>
   <Policies>
     <Policy>OAuthV2-GenerateAccessToken</Policy>

@@ -3,6 +3,9 @@
   <PreFlow name="PreFlow">
     <Request>
       <Step>
+        <Name>FC-CORS</Name>
+      </Step>
+      <Step>
         <Name>FC-Authentication</Name>
       </Step>
     </Request>
@@ -13,16 +16,8 @@
         <Name>AM-UserIdHeader</Name>
         <Condition>accesstoken.climateiq_user_id != null</Condition>
       </Step>
-      <Step>
-        <Name>FC-CORS</Name>
-      </Step>
     </Request>
   </PostFlow>
-  <DefaultFaultRule name="default">
-    <Step>
-      <Name>FC-CORS</Name>
-    </Step>
-  </DefaultFaultRule>
   <HTTPProxyConnection>
     <BasePath>/data</BasePath>
     <!-- Listen only on the HTTPS endpoint -->

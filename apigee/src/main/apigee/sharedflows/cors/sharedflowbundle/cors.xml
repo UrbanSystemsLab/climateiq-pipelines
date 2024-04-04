@@ -2,8 +2,8 @@
 <SharedFlowBundle revision="1" name="cors">
   <DisplayName/>
   <Description/>
-  <CreatedAt>1712084807534</CreatedAt>
-  <LastModifiedAt>1712084807534</LastModifiedAt>
+  <CreatedAt>1712262463865</CreatedAt>
+  <LastModifiedAt>1712262463865</LastModifiedAt>
   <Policies>
     <Policy>CORS-AddHeaders</Policy>
   </Policies>

@@ -2,8 +2,8 @@
 <APIProxy revision="1" name="blog">
   <DisplayName>Blog</DisplayName>
   <Description>Returns ClimateIQ blog data.</Description>
-  <CreatedAt>1712243856721</CreatedAt>
-  <LastModifiedAt>1712243856721</LastModifiedAt>
+  <CreatedAt>1712263409924</CreatedAt>
+  <LastModifiedAt>1712263409924</LastModifiedAt>
   <BasePaths>/blog</BasePaths>
   <Policies>
     <Policy>FC-CORS</Policy>

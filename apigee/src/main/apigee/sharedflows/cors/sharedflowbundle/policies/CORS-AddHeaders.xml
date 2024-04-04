@@ -2,6 +2,8 @@
 <CORS async="false" continueOnError="false" enabled="true" name="CORS-AddHeaders">
   <AllowOrigins>*</AllowOrigins>
   <AllowMethods>GET</AllowMethods>
+  <AllowHeaders>origin, x-requested-with, accept, content-type, authorization</AllowHeaders>
   <ExposeHeaders>*</ExposeHeaders>
   <AllowCredentials>true</AllowCredentials>
+  <GeneratePreflightResponse>true</GeneratePreflightResponse>
 </CORS>
