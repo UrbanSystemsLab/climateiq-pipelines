@@ -3,13 +3,24 @@
   <Flows>
     <Flow name="default">
       <Request>
-	      <Step>
+        <Step>
           <Name>OAuthV2-GenerateAccessToken</Name>
         </Step>
       </Request>
     </Flow>
   </Flows>
-
+  <PostFlow name="PostFlow">
+    <Request>
+      <Step>
+        <Name>FC-CORS</Name>
+      </Step>
+    </Request>
+  </PostFlow>
+  <DefaultFaultRule name="default">
+    <Step>
+      <Name>FC-CORS</Name>
+    </Step>
+  </DefaultFaultRule>
   <HTTPProxyConnection>
     <BasePath>/oauth/token</BasePath>
     <!-- Listen only on the HTTPS endpoint -->

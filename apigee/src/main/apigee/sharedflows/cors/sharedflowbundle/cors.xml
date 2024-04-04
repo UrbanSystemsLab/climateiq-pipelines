@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<SharedFlowBundle revision="1" name="cors">
+  <DisplayName/>
+  <Description/>
+  <CreatedAt>1712084807534</CreatedAt>
+  <LastModifiedAt>1712084807534</LastModifiedAt>
+  <Policies>
+    <Policy>CORS-AddHeaders</Policy>
+  </Policies>
+  <SharedFlows>
+    <SharedFlow>default</SharedFlow>
+  </SharedFlows>
+  <subType>SharedFlow</subType>
+</SharedFlowBundle>

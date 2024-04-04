@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <AssignMessage async="false" continueOnError="false" enabled="true" name="AM-UserIdHeader">
-    <Add>
-        <Headers> 
-            <Header name="climateiq-user-id">{accesstoken.climateiq_user_id}</Header>
-        </Headers>
-    </Add>
+  <Add>
+    <Headers>
+      <Header name="climateiq-user-id">{accesstoken.climateiq_user_id}</Header>
+    </Headers>
+  </Add>
 </AssignMessage>

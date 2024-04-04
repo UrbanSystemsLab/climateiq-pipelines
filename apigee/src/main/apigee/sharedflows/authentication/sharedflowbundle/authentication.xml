@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<SharedFlowBundle revision="1" name="authentication">
+  <DisplayName/>
+  <Description/>
+  <CreatedAt>1712008897428</CreatedAt>
+  <LastModifiedAt>1712008897428</LastModifiedAt>
+  <Policies>
+    <Policy>OAuthV2-VerifyAccessToken</Policy>
+    <Policy>EV-AccessToken</Policy>
+    <Policy>VA-VerifyAPIKey</Policy>
+  </Policies>
+  <SharedFlows>
+    <SharedFlow>default</SharedFlow>
+  </SharedFlows>
+  <subType>SharedFlow</subType>
+</SharedFlowBundle>

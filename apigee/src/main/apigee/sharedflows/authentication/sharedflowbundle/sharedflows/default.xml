@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <SharedFlow revision="1" name="default">
-    <Step>
-        <Name>EV-AccessToken</Name>
-    </Step>
-    <Step>
-        <Name>OAuthV2-VerifyAccessToken</Name>
-        <Condition>access_token != null</Condition>
-    </Step>
-    <Step>
-        <Name>VA-VerifyAPIKey</Name>
-        <Condition>access_token is null</Condition>
-    </Step>
+  <Step>
+    <Name>EV-AccessToken</Name>
+  </Step>
+  <Step>
+    <Name>OAuthV2-VerifyAccessToken</Name>
+    <Condition>access_token != null </Condition>
+  </Step>
+  <Step>
+    <Name>VA-VerifyAPIKey</Name>
+    <Condition>access_token = null </Condition>
+  </Step>
 </SharedFlow>
