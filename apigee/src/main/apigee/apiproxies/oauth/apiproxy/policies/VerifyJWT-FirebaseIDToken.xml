@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<VerifyJWT async="false" continueOnError="true" enabled="true" name='VerifyJWT-Firebase-ID-Token'>
+<VerifyJWT async="false" continueOnError="false" enabled="true" name="VerifyJWT-FirebaseIDToken">
   <Algorithm>RS256</Algorithm>
   <Source>request.formparam.assertion</Source>
   <PublicKey>

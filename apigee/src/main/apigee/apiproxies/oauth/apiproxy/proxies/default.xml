@@ -6,7 +6,7 @@
         <Name>FC-CORS</Name>
       </Step>
       <Step>
-        <Name>RF-Invalid-Grant-Type</Name>
+        <Name>RF-InvalidGrantType</Name>
         <Condition>request.formparam.grant_type != "urn:ietf:params:oauth:grant-type:jwt-bearer"</Condition>
       </Step>
     </Request>
@@ -15,7 +15,13 @@
     <Flow name="default">
       <Request>
         <Step>
-          <Name>VerifyJWT-Firebase-ID-Token</Name>
+          <Name>AM-OAuthV2GrantType</Name>
+        </Step>
+        <Step>
+          <Name>VerifyJWT-FirebaseIDToken</Name>
+        </Step>
+        <Step>
+          <Name>JS-CalculateExpirationTime</Name>
         </Step>
         <Step>
           <Name>OAuthV2-GenerateAccessToken</Name>
