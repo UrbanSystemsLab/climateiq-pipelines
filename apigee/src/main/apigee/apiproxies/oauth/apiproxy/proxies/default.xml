@@ -1,15 +1,21 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <ProxyEndpoint revision="1" name="default">
+  <PreFlow name="PreFlow">
+    <Request>
+      <Step>
+        <Name>FC-CORS</Name>
+      </Step>
+    </Request>
+  </PreFlow>
   <Flows>
     <Flow name="default">
       <Request>
-	      <Step>
+        <Step>
           <Name>OAuthV2-GenerateAccessToken</Name>
         </Step>
       </Request>
     </Flow>
   </Flows>
-
   <HTTPProxyConnection>
     <BasePath>/oauth/token</BasePath>
     <!-- Listen only on the HTTPS endpoint -->

@@ -7,8 +7,8 @@
     <GrantType>client_credentials</GrantType>
   </SupportedGrantTypes>
   <GrantType>request.queryparam.grant_type</GrantType>
-   <Attributes>
-    <Attribute name='climateiq_user_id' display='true'>12345</Attribute>
+  <Attributes>
+    <Attribute name="climateiq_user_id" display="true">12345</Attribute>
   </Attributes>
   <GenerateResponse/>
 </OAuthV2>

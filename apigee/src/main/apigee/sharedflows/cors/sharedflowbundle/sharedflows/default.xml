@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<SharedFlow revision="1" name="default">
+  <Step>
+    <Name>CORS-AddHeaders</Name>
+  </Step>
+</SharedFlow>
