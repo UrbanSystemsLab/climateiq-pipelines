@@ -8,7 +8,7 @@
   </SupportedGrantTypes>
   <GrantType>request.queryparam.grant_type</GrantType>
   <Attributes>
-    <Attribute name="climateiq_user_id" display="true">12345</Attribute>
+    <Attribute name="climateiq_user_id" ref='jwt.VerifyJWT-Firebase-ID-Token.decoded.claim.user_id' display="true"></Attribute>
   </Attributes>
   <GenerateResponse/>
 </OAuthV2>
