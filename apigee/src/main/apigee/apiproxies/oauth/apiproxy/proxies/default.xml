@@ -21,7 +21,7 @@
           <Name>VerifyJWT-FirebaseIDToken</Name>
         </Step>
         <Step>
-          <Name>JS-CalculateExpirationTime</Name>
+          <Name>JS-CalculateAccessTokenExpirationTime</Name>
         </Step>
         <Step>
           <Name>OAuthV2-GenerateAccessToken</Name>

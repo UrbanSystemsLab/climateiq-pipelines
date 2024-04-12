@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <OAuthV2 async="false" continueOnError="false" enabled="true" name="OAuthV2-GenerateAccessToken">
   <Operation>GenerateAccessToken</Operation>
-  <ExpiresIn ref="token_expiry">3600000</ExpiresIn>
+  <!-- Access token should expire at the same time as the JWT ID token. -->
+  <ExpiresIn ref="access_token_expiration_time_ms">3600000</ExpiresIn>
   <SupportedGrantTypes>
     <GrantType>client_credentials</GrantType>
   </SupportedGrantTypes>

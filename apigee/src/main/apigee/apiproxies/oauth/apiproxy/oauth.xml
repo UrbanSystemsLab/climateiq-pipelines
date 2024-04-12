@@ -6,7 +6,7 @@
   <LastModifiedAt>1712872425099</LastModifiedAt>
   <BasePaths>/oauth/token</BasePaths>
   <Policies>
-    <Policy>JS-CalculateExpirationTime</Policy>
+    <Policy>JS-CalculateAccessTokenExpirationTime</Policy>
     <Policy>AM-OAuthV2GrantType</Policy>
     <Policy>FC-CORS</Policy>
     <Policy>OAuthV2-GenerateAccessToken</Policy>
@@ -17,6 +17,6 @@
     <ProxyEndpoint>default</ProxyEndpoint>
   </ProxyEndpoints>
   <Resources>
-    <Resource>jsc://CalculateExpirationTime.js</Resource>
+    <Resource>jsc://CalculateAccessTokenExpirationTime.js</Resource>
   </Resources>
 </APIProxy>
