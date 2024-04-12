@@ -5,11 +5,24 @@
       <Step>
         <Name>FC-CORS</Name>
       </Step>
+      <Step>
+        <Name>RF-InvalidGrantType</Name>
+        <Condition>request.formparam.grant_type != "urn:ietf:params:oauth:grant-type:jwt-bearer"</Condition>
+      </Step>
     </Request>
   </PreFlow>
   <Flows>
     <Flow name="default">
       <Request>
+        <Step>
+          <Name>AM-OAuthV2GrantType</Name>
+        </Step>
+        <Step>
+          <Name>VerifyJWT-FirebaseIDToken</Name>
+        </Step>
+        <Step>
+          <Name>JS-CalculateAccessTokenExpirationTime</Name>
+        </Step>
         <Step>
           <Name>OAuthV2-GenerateAccessToken</Name>
         </Step>

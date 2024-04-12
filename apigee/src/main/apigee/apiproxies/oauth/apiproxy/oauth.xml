@@ -2,14 +2,21 @@
 <APIProxy revision="1" name="oauth">
   <DisplayName>OAuthV2</DisplayName>
   <Description>Dispenses an OAuth 2.0 token.</Description>
-  <CreatedAt>1712260622518</CreatedAt>
-  <LastModifiedAt>1712260622518</LastModifiedAt>
+  <CreatedAt>1712872425099</CreatedAt>
+  <LastModifiedAt>1712872425099</LastModifiedAt>
   <BasePaths>/oauth/token</BasePaths>
   <Policies>
-    <Policy>OAuthV2-GenerateAccessToken</Policy>
+    <Policy>JS-CalculateAccessTokenExpirationTime</Policy>
+    <Policy>AM-OAuthV2GrantType</Policy>
     <Policy>FC-CORS</Policy>
+    <Policy>OAuthV2-GenerateAccessToken</Policy>
+    <Policy>RF-InvalidGrantType</Policy>
+    <Policy>VerifyJWT-FirebaseIDToken</Policy>
   </Policies>
   <ProxyEndpoints>
     <ProxyEndpoint>default</ProxyEndpoint>
   </ProxyEndpoints>
+  <Resources>
+    <Resource>jsc://CalculateAccessTokenExpirationTime.js</Resource>
+  </Resources>
 </APIProxy>
