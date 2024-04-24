@@ -12,7 +12,7 @@ STUDY_AREAS = "study_areas"
 @functions_framework.cloud_event
 def export_model_predictions(cloud_event: CloudEvent) -> Optional[dict]:
     """This function is triggered when a new object is created or an existing
-    object is overwritten in the "climateiq_predictions" storage bucket.
+    object is overwritten in the "climateiq-predictions" storage bucket.
 
     Args:
         cloud_event: The CloudEvent representing the storage event.

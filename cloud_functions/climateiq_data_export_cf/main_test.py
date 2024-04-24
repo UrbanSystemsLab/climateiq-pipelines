@@ -14,7 +14,7 @@ def test_export_model_predictions_invalid_object_name(
         "source": "source",
     }
     data = {
-        "bucket": "climateiq_predictions",
+        "bucket": "climateiq-predictions",
         "name": "invalid_name",  # Invalid object name
     }
     event = CloudEvent(attributes, data)
@@ -37,7 +37,7 @@ def test_export_model_predictions_invalid_study_area(
         "source": "source",
     }
     data = {
-        "bucket": "climateiq_predictions",
+        "bucket": "climateiq-predictions",
         "name": "prediction-type/model-id/study-area-name/scenario-id/"
         "chunk-id",
     }
@@ -63,7 +63,7 @@ def test_export_model_predictions(mock_firestore_client) -> None:
         "source": "source",
     }
     data = {
-        "bucket": "climateiq_predictions",
+        "bucket": "climateiq-predictions",
         "name": "prediction-type/model-id/study-area-name/scenario-id/"
         "chunk-id",
     }
