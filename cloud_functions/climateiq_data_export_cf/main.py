@@ -3,14 +3,13 @@ import pathlib
 
 from cloudevents.http import CloudEvent
 from google.cloud import firestore
-from typing import Optional
 
 STUDY_AREAS_ID = "study_areas"
 
 
 # Triggered by the "object finalized" Cloud Storage event type.
 @functions_framework.cloud_event
-def export_model_predictions(cloud_event: CloudEvent) -> Optional[dict]:
+def export_model_predictions(cloud_event: CloudEvent) -> dict:
     """This function is triggered when a new object is created or an existing
     object is overwritten in the "climateiq-predictions" storage bucket.
 
