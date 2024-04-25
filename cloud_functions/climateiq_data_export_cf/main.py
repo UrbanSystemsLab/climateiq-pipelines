@@ -5,7 +5,7 @@ from cloudevents.http import CloudEvent
 from google.cloud import firestore
 from typing import Optional
 
-STUDY_AREAS = "study_areas"
+STUDY_AREAS_ID = "study_areas"
 
 
 # Triggered by the "object finalized" Cloud Storage event type.
@@ -17,8 +17,10 @@ def export_model_predictions(cloud_event: CloudEvent) -> Optional[dict]:
     Args:
         cloud_event: The CloudEvent representing the storage event.
     Returns:
-        A dictionary containing the study area metadata or None if the study
-        area is not found.
+        A dictionary containing the study area metadata.
+    Raises:
+        ValueError: If the object name format is invalid or the study area does
+        not exist.
     """
     data = cloud_event.data
     name = data["name"]
@@ -35,22 +37,23 @@ def export_model_predictions(cloud_event: CloudEvent) -> Optional[dict]:
     return _get_study_area_metadata(study_area_name)
 
 
-def _get_study_area_metadata(study_area_name: str) -> Optional[dict]:
+def _get_study_area_metadata(study_area_name: str) -> dict:
     """Retrieves metadata for a given study area from Firestore.
 
     Args:
         study_area_name: The name of the study area to retrieve metadata for.
     Returns:
-        A dictionary containing the study area metadata or None if the study
-        area is not found.
+        A dictionary containing the study area metadata.
+    Raises:
+        ValueError: If the study area does not exist.
     """
     db = firestore.Client()
 
     # Retrieve study area metadata from Firestore
-    study_area_ref = db.collection(STUDY_AREAS).document(study_area_name)
-    study_area = study_area_ref.get()
+    study_area_ref = db.collection(STUDY_AREAS_ID).document(study_area_name)
+    study_area_doc = study_area_ref.get()
 
-    if not study_area.exists:
+    if not study_area_doc.exists:
         raise ValueError(f'Study area "{study_area_name}" does not exist')
 
-    return study_area.to_dict()
+    return study_area_doc.to_dict()
