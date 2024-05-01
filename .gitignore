@@ -1,5 +1,5 @@
 apigee/target
 apigee/src/tests
 apigee/src/main/apigee/environments
-cloud_functions/climateiq_data_export_cf/c
+cloud_functions/climateiq_data_export_cf/__pycache__
 cloud_functions/climateiq_data_export_cf/.pytest_cache
