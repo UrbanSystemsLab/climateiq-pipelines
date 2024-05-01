@@ -13,21 +13,23 @@ GLOBAL_CRS = "EPSG:4326"
 
 # Triggered by the "object finalized" Cloud Storage event type.
 @functions_framework.cloud_event
-def export_model_predictions(cloud_event: CloudEvent) -> dict:
+def export_model_predictions(cloud_event: CloudEvent) -> pd.DataFrame:
     """This function is triggered when a new object is created or an existing
     object is overwritten in the "climateiq-predictions" storage bucket.
 
     Args:
         cloud_event: The CloudEvent representing the storage event.
     Returns:
-        pd.DataFrame: A DataFrame with latitude and longitude coordinates for each cell's center in the raster chunk.
+        A DataFrame containing the lat/lon coordinates of each cell's center
+        point.
     Raises:
-        ValueError: If the object name format, study area metadata or chunk area metadata is invalid.
+        ValueError: If the object name format, study area metadata or chunk
+        area metadata is invalid.
     """
     data = cloud_event.data
     name = data["name"]
 
-    # Extract components from the object name
+    # Extract components from the object name.
     path = pathlib.PurePosixPath(name)
     if len(path.parts) != 5:
         raise ValueError("Invalid object name format. Expected 5 components.")
@@ -59,8 +61,8 @@ def _get_study_area_metadata(study_area_name: str) -> dict:
     Returns:
         A dictionary containing metadata for the study area.
     Raises:
-        ValueError: If the study area does not exist or its metadata is missing required
-        fields.
+        ValueError: If the study area does not exist or its metadata is
+        missing required fields.
     """
     db = firestore.Client()
 
@@ -77,7 +79,8 @@ def _get_study_area_metadata(study_area_name: str) -> dict:
         or study_area_metadata.get("chunks") is None
     ):
         raise ValueError(
-            f'Study area "{study_area_name}" is missing one or more required field(s): cell_size, crs, chunks'
+            f'Study area "{study_area_name}" is missing one or more required '
+            'fields: cell_size, crs, chunks'
         )
 
     return study_area_metadata
@@ -87,14 +90,14 @@ def _get_chunk_metadata(study_area_metadata: dict, chunk_id: str) -> dict:
     """Retrieves metadata for a specific chunk within a study area.
 
     Args:
-        study_area_metadata (dict): A dictionary containing metadata for the
+        study_area_metadata: A dictionary containing metadata for the
         study area.
-        chunk_id (str): The unique identifier of the chunk to retrieve
-        metadata for.
+        chunk_id: The unique identifier of the chunk to retrieve metadata for.
     Returns:
         A dictionary containing metadata for the chunk.
     Raises:
-        ValueError: If the specified chunk does not exist or its metadata is missing required fields.
+        ValueError: If the specified chunk does not exist or its metadata is
+        missing required fields.
     """
     chunks = study_area_metadata["chunks"]
     chunk_metadata = chunks.get(chunk_id)
@@ -109,7 +112,8 @@ def _get_chunk_metadata(study_area_metadata: dict, chunk_id: str) -> dict:
         or chunk_metadata.get("y_ll_corner") is None
     ):
         raise ValueError(
-            f'Chunk "{chunk_id}" is missing one or more required fields: row_count, col_count, x_ll_corner, y_ll_corner'
+            f'Chunk "{chunk_id}" is missing one or more required fields: '
+            'row_count, col_count, x_ll_corner, y_ll_corner'
         )
 
     return chunk_metadata
@@ -118,20 +122,23 @@ def _get_chunk_metadata(study_area_metadata: dict, chunk_id: str) -> dict:
 # TODO: Parse bucket contents and append predictions.
 def _build_spatialized_model_predictions(
     study_area_metadata: dict, chunk_metadata: dict
-):
-    """Builds a DataFrame with latitude and longitude coordinates for each cell's center in the raster chunk.
+) -> pd.DataFrame:
+    """Builds a DataFrame containing the lat/lon coordinates of each cell's
+    center point.
 
     Args:
-        study_area_metadata: A dictionary containing metadata for the study area.
+        study_area_metadata: A dictionary containing metadata for the study
+        area.
         chunk_metadata: A dictionary containing metadata for the chunk.
 
     Returns:
-        pd.DataFrame: A DataFrame with two columns: 'lat' and 'lon'.
+        A DataFrame containing the lat/lon coordinates of each cell's center
+        point.
     """
     rows = np.arange(chunk_metadata["row_count"])
     cols = np.arange(chunk_metadata["col_count"])
 
-    # Calculate cell center coordinates in the raster's CRS.
+    # Calculate cell's center point in the source CRS.
     x_centers = (
         chunk_metadata["x_ll_corner"]
         + (cols + 0.5) * study_area_metadata["cell_size"]
@@ -140,14 +147,13 @@ def _build_spatialized_model_predictions(
         chunk_metadata["y_ll_corner"]
         + (rows + 0.5) * study_area_metadata["cell_size"]
     )
-
     x_grid, y_grid = np.meshgrid(x_centers, y_centers)
 
     # Convert 2D meshgrids to 1D arrays.
     x_coords = x_grid.flatten()
     y_coords = y_grid.flatten()
 
-    # Convert coordinates from the raster's CRS to the global CRS (lat/lon).
+    # Convert coordinates from the source CRS to the global CRS (lat/lon).
     gdf_src_crs = gpd.GeoDataFrame(
         geometry=gpd.points_from_xy(x_coords, y_coords),
         crs=study_area_metadata["crs"],
