@@ -76,7 +76,7 @@ def _get_chunk_metadata(study_area_metadata: dict, chunk_id: str) -> dict:
         chunk_id (str): The unique identifier of the chunk to retrieve
         metadata for.
     Returns:
-        A dictionary containing metadata for the chunk
+        A dictionary containing metadata for the chunk.
     Raises:
         ValueError: If the specified chunk does not exist.
     """
