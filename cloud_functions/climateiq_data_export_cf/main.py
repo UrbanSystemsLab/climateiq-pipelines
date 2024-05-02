@@ -18,10 +18,12 @@ def export_model_predictions(cloud_event: CloudEvent) -> pd.DataFrame:
     object is overwritten in the "climateiq-predictions" storage bucket.
 
     Args:
-        cloud_event: The CloudEvent representing the storage event.
+        cloud_event: The CloudEvent representing the storage event. The name
+        of the object should conform to the following pattern:
+        "<prediction_type>/<model_id>/<study_area_name><scenario_id>/<chunk_id>"
     Returns:
-        A DataFrame containing the lat/lon coordinates of each cell's center
-        point.
+        A DataFrame containing the lat/lon coordinates of cell centers in a
+        single chunk, representing a subset of the full study area results.
     Raises:
         ValueError: If the object name format, study area metadata or chunk
         area metadata is invalid.
@@ -38,15 +40,8 @@ def export_model_predictions(cloud_event: CloudEvent) -> pd.DataFrame:
         path.parts
     )
 
-    try:
-        study_area_metadata = _get_study_area_metadata(study_area_name)
-    except ValueError as ve:
-        raise ve
-
-    try:
-        chunk_metadata = _get_chunk_metadata(study_area_metadata, chunk_id)
-    except ValueError as ve:
-        raise ve
+    study_area_metadata = _get_study_area_metadata(study_area_name)
+    chunk_metadata = _get_chunk_metadata(study_area_metadata, chunk_id)
 
     return _build_spatialized_model_predictions(
         study_area_metadata, chunk_metadata
@@ -64,6 +59,7 @@ def _get_study_area_metadata(study_area_name: str) -> dict:
         ValueError: If the study area does not exist or its metadata is
         missing required fields.
     """
+    # TODO: Consider refactoring this to use library from climateiq-cnn repo.
     db = firestore.Client()
 
     study_area_ref = db.collection(STUDY_AREAS_ID).document(study_area_name)
@@ -130,10 +126,9 @@ def _build_spatialized_model_predictions(
         study_area_metadata: A dictionary containing metadata for the study
         area.
         chunk_metadata: A dictionary containing metadata for the chunk.
-
     Returns:
-        A DataFrame containing the lat/lon coordinates of each cell's center
-        point.
+        A DataFrame containing the lat/lon coordinates of cell centers in a
+        single chunk, representing a subset of the full study area results.
     """
     rows = np.arange(chunk_metadata["row_count"])
     cols = np.arange(chunk_metadata["col_count"])
