@@ -103,7 +103,7 @@ def _get_study_area_metadata(study_area_name: str) -> dict:
     ):
         raise ValueError(
             f'Study area "{study_area_name}" is missing one or more required '
-            'fields: cell_size, crs, chunks'
+            "fields: cell_size, crs, chunks"
         )
 
     return study_area_metadata
@@ -136,7 +136,7 @@ def _get_chunk_metadata(study_area_metadata: dict, chunk_id: str) -> dict:
     ):
         raise ValueError(
             f'Chunk "{chunk_id}" is missing one or more required fields: '
-            'row_count, col_count, x_ll_corner, y_ll_corner'
+            "row_count, col_count, x_ll_corner, y_ll_corner"
         )
 
     return chunk_metadata
@@ -183,10 +183,13 @@ def _build_spatialized_model_predictions(
     )
     gdf_global_crs = gdf_src_crs.to_crs(GLOBAL_CRS)
 
-    # Reverse prediction rows to align with coordinates.
-    predictions_aligned = np.flipud(predictions).flatten()
+    # Reverse prediction rows to align with generated coordinates.
+    aligned_predictions = np.flipud(predictions).flatten()
 
     return pd.DataFrame(
-        {"lat": gdf_global_crs.geometry.y, "lon": gdf_global_crs.geometry.x,
-         "prediction": predictions_aligned}
+        {
+            "lat": gdf_global_crs.geometry.y,
+            "lon": gdf_global_crs.geometry.x,
+            "prediction": aligned_predictions,
+        }
     )

@@ -56,7 +56,7 @@ def test_export_model_predictions_missing_study_area(
 
     # Build mock Firestore document
     mock_document = mock.create_autospec(firestore.DocumentSnapshot)
-    mock_document.exists = False  # Indicate study area does not exist
+    mock_document.exists = False  # Indicate study area doesn't exist
     metadata = {
         "name": "study_area_name",
         "cell_size": 10,
@@ -71,10 +71,9 @@ def test_export_model_predictions_missing_study_area(
         },
     }
     mock_document.to_dict.return_value = metadata
-    mock_firestore_client.return_value.collection.return_value.document \
-        .return_value.get.return_value = (
-            mock_document
-        )
+    mock_firestore_client.return_value.collection.return_value.document.return_value.get.return_value = (
+        mock_document
+    )
 
     with pytest.raises(ValueError) as exc_info:
         main.export_model_predictions(event)
@@ -120,12 +119,11 @@ def test_export_model_predictions_invalid_study_area(
                 "y_ll_corner": 100,
             }
         },
-    }  # Missing cell size.
+    }  # Missing "cell_size" required field
     mock_document.to_dict.return_value = metadata
-    mock_firestore_client.return_value.collection.return_value.document \
-        .return_value.get.return_value = (
-            mock_document
-        )
+    mock_firestore_client.return_value.collection.return_value.document.return_value.get.return_value = (
+        mock_document
+    )
 
     with pytest.raises(ValueError) as exc_info:
         main.export_model_predictions(event)
@@ -177,10 +175,9 @@ def test_export_model_predictions_missing_chunk(
         },
     }
     mock_document.to_dict.return_value = metadata
-    mock_firestore_client.return_value.collection.return_value.document \
-        .return_value.get.return_value = (
-            mock_document
-        )
+    mock_firestore_client.return_value.collection.return_value.document.return_value.get.return_value = (
+        mock_document
+    )
 
     with pytest.raises(ValueError) as exc_info:
         main.export_model_predictions(event)
@@ -228,10 +225,9 @@ def test_export_model_predictions_invalid_chunk(
         },
     }  # Missing "row_count" required field
     mock_document.to_dict.return_value = metadata
-    mock_firestore_client.return_value.collection.return_value.document \
-        .return_value.get.return_value = (
-            mock_document
-        )
+    mock_firestore_client.return_value.collection.return_value.document.return_value.get.return_value = (
+        mock_document
+    )
 
     with pytest.raises(ValueError) as exc_info:
         main.export_model_predictions(event)
@@ -284,10 +280,9 @@ def test_export_model_predictions(
         },
     }
     mock_document.to_dict.return_value = metadata
-    mock_firestore_client.return_value.collection.return_value.document \
-        .return_value.get.return_value = (
-            mock_document
-        )
+    mock_firestore_client.return_value.collection.return_value.document.return_value.get.return_value = (
+        mock_document
+    )
 
     # Build expected output data
     expected_x_coods = np.array([505, 515, 525, 505, 515, 525])
