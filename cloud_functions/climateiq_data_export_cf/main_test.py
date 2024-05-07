@@ -49,8 +49,13 @@ def test_export_model_predictions_missing_study_area(
     # Build mock Storage object
     mock_bucket = mock.create_autospec(storage.Bucket)
     mock_blob = mock.create_autospec(storage.Blob)
-    predictions = {"predictions": [[1, 2, 3], [4, 5, 6]]}
-    mock_blob.download_as_text.return_value = json.dumps(predictions)
+    predictions = [
+        {"instance": [1, 2, 3], "prediction": [1, 2, 3]},
+        {"instance": [4, 5, 6], "prediction": [4, 5, 6]},
+    ]
+    mock_blob.open.return_value.__enter__.return_value.read.return_value = (
+        json.dumps(predictions)
+    )
     mock_bucket.blob.return_value = mock_blob
     mock_storage_client.return_value.bucket.return_value = mock_bucket
 
@@ -101,8 +106,13 @@ def test_export_model_predictions_invalid_study_area(
     # Build mock Storage object
     mock_bucket = mock.create_autospec(storage.Bucket)
     mock_blob = mock.create_autospec(storage.Blob)
-    predictions = {"predictions": [[1, 2, 3], [4, 5, 6]]}
-    mock_blob.download_as_text.return_value = json.dumps(predictions)
+    predictions = [
+        {"instance": [1, 2, 3], "prediction": [1, 2, 3]},
+        {"instance": [4, 5, 6], "prediction": [4, 5, 6]},
+    ]
+    mock_blob.open.return_value.__enter__.return_value.read.return_value = (
+        json.dumps(predictions)
+    )
     mock_bucket.blob.return_value = mock_blob
     mock_storage_client.return_value.bucket.return_value = mock_bucket
 
@@ -155,8 +165,13 @@ def test_export_model_predictions_missing_chunk(
     # Build mock Storage object
     mock_bucket = mock.create_autospec(storage.Bucket)
     mock_blob = mock.create_autospec(storage.Blob)
-    predictions = {"predictions": [[1, 2, 3], [4, 5, 6]]}
-    mock_blob.download_as_text.return_value = json.dumps(predictions)
+    predictions = [
+        {"instance": [1, 2, 3], "prediction": [1, 2, 3]},
+        {"instance": [4, 5, 6], "prediction": [4, 5, 6]},
+    ]
+    mock_blob.open.return_value.__enter__.return_value.read.return_value = (
+        json.dumps(predictions)
+    )
     mock_bucket.blob.return_value = mock_blob
     mock_storage_client.return_value.bucket.return_value = mock_bucket
 
@@ -207,8 +222,13 @@ def test_export_model_predictions_invalid_chunk(
     # Build mock Storage object
     mock_bucket = mock.create_autospec(storage.Bucket)
     mock_blob = mock.create_autospec(storage.Blob)
-    predictions = {"predictions": [[1, 2, 3], [4, 5, 6]]}
-    mock_blob.download_as_text.return_value = json.dumps(predictions)
+    predictions = [
+        {"instance": [1, 2, 3], "prediction": [1, 2, 3]},
+        {"instance": [4, 5, 6], "prediction": [4, 5, 6]},
+    ]
+    mock_blob.open.return_value.__enter__.return_value.read.return_value = (
+        json.dumps(predictions)
+    )
     mock_bucket.blob.return_value = mock_blob
     mock_storage_client.return_value.bucket.return_value = mock_bucket
 
@@ -262,8 +282,13 @@ def test_export_model_predictions(
     # Build mock Storage object
     mock_bucket = mock.create_autospec(storage.Bucket)
     mock_blob = mock.create_autospec(storage.Blob)
-    predictions = {"predictions": [[1, 2, 3], [4, 5, 6]]}
-    mock_blob.download_as_text.return_value = json.dumps(predictions)
+    predictions = [
+        {"instance": [1, 2, 3], "prediction": [1, 2, 3]},
+        {"instance": [4, 5, 6], "prediction": [4, 5, 6]},
+    ]
+    mock_blob.open.return_value.__enter__.return_value.read.return_value = (
+        json.dumps(predictions)
+    )
     mock_bucket.blob.return_value = mock_blob
     mock_storage_client.return_value.bucket.return_value = mock_bucket
 

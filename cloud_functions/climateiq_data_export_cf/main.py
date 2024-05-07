@@ -69,10 +69,11 @@ def _read_chunk(bucket_name: str, object_name: str) -> np.ndarray:
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(object_name)
+    with blob.open() as fd:
+        data = json.load(fd)
 
-    json_string = blob.download_as_text()
-    data = json.loads(json_string)
-    return np.array(data["predictions"])
+    predictions = [entry["prediction"] for entry in data]
+    return np.array(predictions)
 
 
 def _get_study_area_metadata(study_area_name: str) -> dict:
