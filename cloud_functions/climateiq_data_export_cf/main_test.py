@@ -1,10 +1,10 @@
 import main
 import pytest
-import json
 import numpy as np
 import pandas as pd
 import geopandas as gpd
 
+from unittest.mock import MagicMock
 from google.cloud import storage
 from google.cloud import firestore
 from cloudevents.http import CloudEvent
@@ -49,18 +49,10 @@ def test_export_model_predictions_missing_study_area(
     # Build mock Storage object
     mock_bucket = mock.create_autospec(storage.Bucket)
     mock_blob = mock.create_autospec(storage.Blob)
-    predictions = [
-            {"instance": [1], "prediction": [1]},
-            {"instance": [2], "prediction": [2]},
-            {"instance": [3], "prediction": [3]},
-            {"instance": [4], "prediction": [4]},
-            {"instance": [5], "prediction": [5]},
-            {"instance": [6], "prediction": [6]},
-        ]
-
-    mock_blob.open.return_value.__enter__.return_value.read.return_value = (
-        json.dumps(predictions)
-    )
+    predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}\n'
+    mock_fd = MagicMock()
+    mock_fd.__iter__.return_value = predictions.splitlines()
+    mock_blob.open.return_value.__enter__.return_value = mock_fd
     mock_bucket.blob.return_value = mock_blob
     mock_storage_client.return_value.bucket.return_value = mock_bucket
 
@@ -111,18 +103,10 @@ def test_export_model_predictions_invalid_study_area(
     # Build mock Storage object
     mock_bucket = mock.create_autospec(storage.Bucket)
     mock_blob = mock.create_autospec(storage.Blob)
-    predictions = [
-            {"instance": [1], "prediction": [1]},
-            {"instance": [2], "prediction": [2]},
-            {"instance": [3], "prediction": [3]},
-            {"instance": [4], "prediction": [4]},
-            {"instance": [5], "prediction": [5]},
-            {"instance": [6], "prediction": [6]},
-        ]
-
-    mock_blob.open.return_value.__enter__.return_value.read.return_value = (
-        json.dumps(predictions)
-    )
+    predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}\n'
+    mock_fd = MagicMock()
+    mock_fd.__iter__.return_value = predictions.splitlines()
+    mock_blob.open.return_value.__enter__.return_value = mock_fd
     mock_bucket.blob.return_value = mock_blob
     mock_storage_client.return_value.bucket.return_value = mock_bucket
 
@@ -175,18 +159,10 @@ def test_export_model_predictions_missing_chunk(
     # Build mock Storage object
     mock_bucket = mock.create_autospec(storage.Bucket)
     mock_blob = mock.create_autospec(storage.Blob)
-    predictions = [
-            {"instance": [1], "prediction": [1]},
-            {"instance": [2], "prediction": [2]},
-            {"instance": [3], "prediction": [3]},
-            {"instance": [4], "prediction": [4]},
-            {"instance": [5], "prediction": [5]},
-            {"instance": [6], "prediction": [6]},
-        ]
-
-    mock_blob.open.return_value.__enter__.return_value.read.return_value = (
-        json.dumps(predictions)
-    )
+    predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}\n'
+    mock_fd = MagicMock()
+    mock_fd.__iter__.return_value = predictions.splitlines()
+    mock_blob.open.return_value.__enter__.return_value = mock_fd
     mock_bucket.blob.return_value = mock_blob
     mock_storage_client.return_value.bucket.return_value = mock_bucket
 
@@ -237,18 +213,10 @@ def test_export_model_predictions_invalid_chunk(
     # Build mock Storage object
     mock_bucket = mock.create_autospec(storage.Bucket)
     mock_blob = mock.create_autospec(storage.Blob)
-    predictions = [
-            {"instance": [1], "prediction": [1]},
-            {"instance": [2], "prediction": [2]},
-            {"instance": [3], "prediction": [3]},
-            {"instance": [4], "prediction": [4]},
-            {"instance": [5], "prediction": [5]},
-            {"instance": [6], "prediction": [6]},
-        ]
-
-    mock_blob.open.return_value.__enter__.return_value.read.return_value = (
-        json.dumps(predictions)
-    )
+    predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}\n'
+    mock_fd = MagicMock()
+    mock_fd.__iter__.return_value = predictions.splitlines()
+    mock_blob.open.return_value.__enter__.return_value = mock_fd
     mock_bucket.blob.return_value = mock_blob
     mock_storage_client.return_value.bucket.return_value = mock_bucket
 
@@ -302,18 +270,10 @@ def test_export_model_predictions(
     # Build mock Storage object
     mock_bucket = mock.create_autospec(storage.Bucket)
     mock_blob = mock.create_autospec(storage.Blob)
-    predictions = [
-            {"instance": [1], "prediction": [1]},
-            {"instance": [2], "prediction": [2]},
-            {"instance": [3], "prediction": [3]},
-            {"instance": [4], "prediction": [4]},
-            {"instance": [5], "prediction": [5]},
-            {"instance": [6], "prediction": [6]},
-        ]
-
-    mock_blob.open.return_value.__enter__.return_value.read.return_value = (
-        json.dumps(predictions)
-    )
+    predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}\n'
+    mock_fd = MagicMock()
+    mock_fd.__iter__.return_value = predictions.splitlines()
+    mock_blob.open.return_value.__enter__.return_value = mock_fd
     mock_bucket.blob.return_value = mock_blob
     mock_storage_client.return_value.bucket.return_value = mock_bucket
 
