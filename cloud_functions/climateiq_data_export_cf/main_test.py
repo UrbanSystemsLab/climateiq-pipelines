@@ -50,9 +50,14 @@ def test_export_model_predictions_missing_study_area(
     mock_bucket = mock.create_autospec(storage.Bucket)
     mock_blob = mock.create_autospec(storage.Blob)
     predictions = [
-        {"instance": [1, 2, 3], "prediction": [1, 2, 3]},
-        {"instance": [4, 5, 6], "prediction": [4, 5, 6]},
-    ]
+            {"instance": [1], "prediction": [1]},
+            {"instance": [2], "prediction": [2]},
+            {"instance": [3], "prediction": [3]},
+            {"instance": [4], "prediction": [4]},
+            {"instance": [5], "prediction": [5]},
+            {"instance": [6], "prediction": [6]},
+        ]
+
     mock_blob.open.return_value.__enter__.return_value.read.return_value = (
         json.dumps(predictions)
     )
@@ -107,9 +112,14 @@ def test_export_model_predictions_invalid_study_area(
     mock_bucket = mock.create_autospec(storage.Bucket)
     mock_blob = mock.create_autospec(storage.Blob)
     predictions = [
-        {"instance": [1, 2, 3], "prediction": [1, 2, 3]},
-        {"instance": [4, 5, 6], "prediction": [4, 5, 6]},
-    ]
+            {"instance": [1], "prediction": [1]},
+            {"instance": [2], "prediction": [2]},
+            {"instance": [3], "prediction": [3]},
+            {"instance": [4], "prediction": [4]},
+            {"instance": [5], "prediction": [5]},
+            {"instance": [6], "prediction": [6]},
+        ]
+
     mock_blob.open.return_value.__enter__.return_value.read.return_value = (
         json.dumps(predictions)
     )
@@ -166,9 +176,14 @@ def test_export_model_predictions_missing_chunk(
     mock_bucket = mock.create_autospec(storage.Bucket)
     mock_blob = mock.create_autospec(storage.Blob)
     predictions = [
-        {"instance": [1, 2, 3], "prediction": [1, 2, 3]},
-        {"instance": [4, 5, 6], "prediction": [4, 5, 6]},
-    ]
+            {"instance": [1], "prediction": [1]},
+            {"instance": [2], "prediction": [2]},
+            {"instance": [3], "prediction": [3]},
+            {"instance": [4], "prediction": [4]},
+            {"instance": [5], "prediction": [5]},
+            {"instance": [6], "prediction": [6]},
+        ]
+
     mock_blob.open.return_value.__enter__.return_value.read.return_value = (
         json.dumps(predictions)
     )
@@ -223,9 +238,14 @@ def test_export_model_predictions_invalid_chunk(
     mock_bucket = mock.create_autospec(storage.Bucket)
     mock_blob = mock.create_autospec(storage.Blob)
     predictions = [
-        {"instance": [1, 2, 3], "prediction": [1, 2, 3]},
-        {"instance": [4, 5, 6], "prediction": [4, 5, 6]},
-    ]
+            {"instance": [1], "prediction": [1]},
+            {"instance": [2], "prediction": [2]},
+            {"instance": [3], "prediction": [3]},
+            {"instance": [4], "prediction": [4]},
+            {"instance": [5], "prediction": [5]},
+            {"instance": [6], "prediction": [6]},
+        ]
+
     mock_blob.open.return_value.__enter__.return_value.read.return_value = (
         json.dumps(predictions)
     )
@@ -283,9 +303,14 @@ def test_export_model_predictions(
     mock_bucket = mock.create_autospec(storage.Bucket)
     mock_blob = mock.create_autospec(storage.Blob)
     predictions = [
-        {"instance": [1, 2, 3], "prediction": [1, 2, 3]},
-        {"instance": [4, 5, 6], "prediction": [4, 5, 6]},
-    ]
+            {"instance": [1], "prediction": [1]},
+            {"instance": [2], "prediction": [2]},
+            {"instance": [3], "prediction": [3]},
+            {"instance": [4], "prediction": [4]},
+            {"instance": [5], "prediction": [5]},
+            {"instance": [6], "prediction": [6]},
+        ]
+
     mock_blob.open.return_value.__enter__.return_value.read.return_value = (
         json.dumps(predictions)
     )

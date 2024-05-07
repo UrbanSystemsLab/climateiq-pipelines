@@ -64,7 +64,7 @@ def _read_chunk(bucket_name: str, object_name: str) -> np.ndarray:
         object.
         object_name (str): The name of the chunk object to read.
     Returns:
-        np.ndarray: A 2D array containing the model predictions for the chunk.
+        np.ndarray: An array containing the model predictions for the chunk.
     """
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
@@ -153,7 +153,7 @@ def _build_spatialized_model_predictions(
         study_area_metadata: A dictionary containing metadata for the study
         area.
         chunk_metadata: A dictionary containing metadata for the chunk.
-        predictions: A 2D array containing the model predictions for the chunk.
+        predictions: An array containing the model predictions for the chunk.
     Returns:
         A DataFrame containing the lat/lon coordinates of cell centers in a
         single chunk along with associated predictions, representing a
@@ -185,6 +185,8 @@ def _build_spatialized_model_predictions(
     gdf_global_crs = gdf_src_crs.to_crs(GLOBAL_CRS)
 
     # Reverse prediction rows to align with generated coordinates.
+    predictions = np.reshape(predictions, (chunk_metadata["row_count"],
+                                           chunk_metadata["col_count"]))
     aligned_predictions = np.flipud(predictions).flatten()
 
     return pd.DataFrame(
