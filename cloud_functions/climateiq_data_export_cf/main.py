@@ -28,8 +28,8 @@ def export_model_predictions(cloud_event: CloudEvent) -> pd.DataFrame:
         single chunk along with associated predictions, representing a
         subset of the full study area results.
     Raises:
-        ValueError: If the object name format, study area metadata or chunk
-        area metadata is invalid.
+        ValueError: If the object name format, study area metadata, chunk
+        area metadata or predictions file format is invalid.
     """
     data = cloud_event.data
     object_name = data["name"]
@@ -44,7 +44,7 @@ def export_model_predictions(cloud_event: CloudEvent) -> pd.DataFrame:
         path.parts
     )
 
-    predictions = _read_chunk(bucket_name, object_name)
+    predictions = _read_chunk_predictions(bucket_name, object_name)
     study_area_metadata = _get_study_area_metadata(study_area_name)
     chunk_metadata = _get_chunk_metadata(study_area_metadata, chunk_id)
 
@@ -55,7 +55,7 @@ def export_model_predictions(cloud_event: CloudEvent) -> pd.DataFrame:
 
 # TODO: Modify this logic once CNN output schema is confirmed. Also update to
 # account for errors and special values.
-def _read_chunk(bucket_name: str, object_name: str) -> np.ndarray:
+def _read_chunk_predictions(bucket_name: str, object_name: str) -> np.ndarray:
     """Reads model predictions for a given chunk from GCS and outputs
     these predictions in a 2D array.
 
@@ -66,23 +66,26 @@ def _read_chunk(bucket_name: str, object_name: str) -> np.ndarray:
     Returns:
         np.ndarray: A 2D array containing the model predictions for the chunk.
     Raises:
-        ValueError: If the predictions format is invalid.
+        ValueError: If the predictions file format is invalid.
     """
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(object_name)
 
-    predictions = []
-    line_count = 0
     with blob.open() as fd:
-        for line in fd:
-            line_count += 1
-            if line_count > 1:
-                raise ValueError("Invalid predictions format. \
-                                 Expected only 1 line.")
-            prediction = json.loads(line)['prediction']
-            predictions.append(prediction)
-    return np.array(predictions)[0]
+        fd_iter = iter(fd)
+        line = next(fd_iter, None)
+        # Vertex AI will output one predictions file per chunk so the file is
+        # expected to contain only one prediction.
+        if line is None:
+            raise ValueError("Predictions file is missing predictions.")
+
+        prediction = json.loads(line)["prediction"]
+
+        if next(fd_iter, None) is not None:
+            raise ValueError("Predictions file has too many predictions.")
+
+    return np.array(prediction)
 
 
 def _get_study_area_metadata(study_area_name: str) -> dict:
