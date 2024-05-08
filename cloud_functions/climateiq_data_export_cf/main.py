@@ -1,11 +1,13 @@
 import functions_framework
 import pathlib
+import json
 import geopandas as gpd
 import pandas as pd
 import numpy as np
 
 from cloudevents.http import CloudEvent
 from google.cloud import firestore
+from google.cloud import storage
 
 STUDY_AREAS_ID = "study_areas"
 GLOBAL_CRS = "EPSG:4326"
@@ -20,19 +22,21 @@ def export_model_predictions(cloud_event: CloudEvent) -> pd.DataFrame:
     Args:
         cloud_event: The CloudEvent representing the storage event. The name
         of the object should conform to the following pattern:
-        "<prediction_type>/<model_id>/<study_area_name><scenario_id>/<chunk_id>"
+        "<prediction_type>/<model_id>/<study_area_name>/<scenario_id>/<chunk_id>"
     Returns:
         A DataFrame containing the lat/lon coordinates of cell centers in a
-        single chunk, representing a subset of the full study area results.
+        single chunk along with associated predictions, representing a
+        subset of the full study area results.
     Raises:
-        ValueError: If the object name format, study area metadata or chunk
-        area metadata is invalid.
+        ValueError: If the object name format, study area metadata, chunk
+        area metadata or predictions file format is invalid.
     """
     data = cloud_event.data
-    name = data["name"]
+    object_name = data["name"]
+    bucket_name = data["bucket"]
 
     # Extract components from the object name.
-    path = pathlib.PurePosixPath(name)
+    path = pathlib.PurePosixPath(object_name)
     if len(path.parts) != 5:
         raise ValueError("Invalid object name format. Expected 5 components.")
 
@@ -40,12 +44,48 @@ def export_model_predictions(cloud_event: CloudEvent) -> pd.DataFrame:
         path.parts
     )
 
+    predictions = _read_chunk_predictions(bucket_name, object_name)
     study_area_metadata = _get_study_area_metadata(study_area_name)
     chunk_metadata = _get_chunk_metadata(study_area_metadata, chunk_id)
 
     return _build_spatialized_model_predictions(
-        study_area_metadata, chunk_metadata
+        study_area_metadata, chunk_metadata, predictions
     )
+
+
+# TODO: Modify this logic once CNN output schema is confirmed. Also update to
+# account for errors and special values.
+def _read_chunk_predictions(bucket_name: str, object_name: str) -> np.ndarray:
+    """Reads model predictions for a given chunk from GCS and outputs
+    these predictions in a 2D array.
+
+    Args:
+        bucket_name (str): The name of the GCS bucket containing the chunk
+        object.
+        object_name (str): The name of the chunk object to read.
+    Returns:
+        np.ndarray: A 2D array containing the model predictions for the chunk.
+    Raises:
+        ValueError: If the predictions file format is invalid.
+    """
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(object_name)
+
+    with blob.open() as fd:
+        fd_iter = iter(fd)
+        line = next(fd_iter, None)
+        # Vertex AI will output one predictions file per chunk so the file is
+        # expected to contain only one prediction.
+        if line is None:
+            raise ValueError("Predictions file is missing predictions.")
+
+        prediction = json.loads(line)["prediction"]
+
+        if next(fd_iter, None) is not None:
+            raise ValueError("Predictions file has too many predictions.")
+
+    return np.array(prediction)
 
 
 def _get_study_area_metadata(study_area_name: str) -> dict:
@@ -76,7 +116,7 @@ def _get_study_area_metadata(study_area_name: str) -> dict:
     ):
         raise ValueError(
             f'Study area "{study_area_name}" is missing one or more required '
-            'fields: cell_size, crs, chunks'
+            "fields: cell_size, crs, chunks"
         )
 
     return study_area_metadata
@@ -109,15 +149,14 @@ def _get_chunk_metadata(study_area_metadata: dict, chunk_id: str) -> dict:
     ):
         raise ValueError(
             f'Chunk "{chunk_id}" is missing one or more required fields: '
-            'row_count, col_count, x_ll_corner, y_ll_corner'
+            "row_count, col_count, x_ll_corner, y_ll_corner"
         )
 
     return chunk_metadata
 
 
-# TODO: Parse bucket contents and append predictions.
 def _build_spatialized_model_predictions(
-    study_area_metadata: dict, chunk_metadata: dict
+    study_area_metadata: dict, chunk_metadata: dict, predictions: np.ndarray
 ) -> pd.DataFrame:
     """Builds a DataFrame containing the lat/lon coordinates of each cell's
     center point.
@@ -126,9 +165,11 @@ def _build_spatialized_model_predictions(
         study_area_metadata: A dictionary containing metadata for the study
         area.
         chunk_metadata: A dictionary containing metadata for the chunk.
+        predictions: A 2D array containing the model predictions for the chunk.
     Returns:
         A DataFrame containing the lat/lon coordinates of cell centers in a
-        single chunk, representing a subset of the full study area results.
+        single chunk along with associated predictions, representing a
+        subset of the full study area results.
     """
     rows = np.arange(chunk_metadata["row_count"])
     cols = np.arange(chunk_metadata["col_count"])
@@ -154,6 +195,14 @@ def _build_spatialized_model_predictions(
         crs=study_area_metadata["crs"],
     )
     gdf_global_crs = gdf_src_crs.to_crs(GLOBAL_CRS)
+
+    # Reverse prediction rows to align with generated coordinates.
+    aligned_predictions = np.flipud(predictions).flatten()
+
     return pd.DataFrame(
-        {"lat": gdf_global_crs.geometry.y, "lon": gdf_global_crs.geometry.x}
+        {
+            "lat": gdf_global_crs.geometry.y,
+            "lon": gdf_global_crs.geometry.x,
+            "prediction": aligned_predictions,
+        }
     )
