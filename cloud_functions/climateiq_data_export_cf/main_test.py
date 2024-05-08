@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 
-from unittest.mock import MagicMock
 from cloudevents.http import CloudEvent
 from unittest import mock
 
@@ -94,16 +93,17 @@ def test_export_model_predictions_invalid_study_area(
             }
         },
     }  # Missing "cell_size" required field
-    mock_firestore_client().collection().document().get.return_value = (
-        MagicMock(to_dict=lambda: metadata)
-    )
+    mock_firestore_client().collection().document().get() \
+        .to_dict.return_value = (
+            metadata
+        )
 
     with pytest.raises(ValueError) as exc_info:
         main.export_model_predictions(event)
 
     assert (
         'Study area "study-area-name" is missing one or more required '
-        'fields: cell_size, crs, chunks' in str(exc_info.value)
+        "fields: cell_size, crs, chunks" in str(exc_info.value)
     )
 
 
@@ -142,9 +142,10 @@ def test_export_model_predictions_missing_chunk(
             }
         },
     }
-    mock_firestore_client().collection().document().get.return_value = (
-        MagicMock(to_dict=lambda: metadata)
-    )
+    mock_firestore_client().collection().document().get() \
+        .to_dict.return_value = (
+            metadata
+        )
 
     with pytest.raises(ValueError) as exc_info:
         main.export_model_predictions(event)
@@ -186,16 +187,17 @@ def test_export_model_predictions_invalid_chunk(
             }
         },
     }  # Missing "row_count" required field
-    mock_firestore_client().collection().document().get.return_value = (
-        MagicMock(to_dict=lambda: metadata)
-    )
+    mock_firestore_client().collection().document().get() \
+        .to_dict.return_value = (
+            metadata
+        )
 
     with pytest.raises(ValueError) as exc_info:
         main.export_model_predictions(event)
 
     assert (
         'Chunk "chunk-id" is missing one or more required '
-        'fields: row_count, col_count, x_ll_corner, y_ll_corner'
+        "fields: row_count, col_count, x_ll_corner, y_ll_corner"
         in str(exc_info.value)
     )
 
@@ -235,9 +237,10 @@ def test_export_model_predictions_missing_predictions(
             }
         },
     }
-    mock_firestore_client().collection().document().get.return_value = (
-        MagicMock(to_dict=lambda: metadata)
-    )
+    mock_firestore_client().collection().document().get() \
+        .to_dict.return_value = (
+            metadata
+        )
 
     with pytest.raises(ValueError) as exc_info:
         main.export_model_predictions(event)
@@ -283,9 +286,10 @@ def test_export_model_predictions_too_many_predictions(
             }
         },
     }
-    mock_firestore_client().collection().document().get.return_value = (
-        MagicMock(to_dict=lambda: metadata)
-    )
+    mock_firestore_client().collection().document().get() \
+        .to_dict.return_value = (
+            metadata
+        )
 
     with pytest.raises(ValueError) as exc_info:
         main.export_model_predictions(event)
@@ -328,9 +332,10 @@ def test_export_model_predictions(
             }
         },
     }
-    mock_firestore_client().collection().document().get.return_value = (
-        MagicMock(to_dict=lambda: metadata)
-    )
+    mock_firestore_client().collection().document().get() \
+        .to_dict.return_value = (
+            metadata
+        )
 
     # Build expected output data
     expected_x_coods = np.array([505, 515, 525, 505, 515, 525])
