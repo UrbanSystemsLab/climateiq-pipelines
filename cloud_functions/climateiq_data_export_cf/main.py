@@ -15,7 +15,7 @@ GLOBAL_CRS = "EPSG:4326"
 
 # Triggered by the "object finalized" Cloud Storage event type.
 @functions_framework.cloud_event
-def export_model_predictions(cloud_event: CloudEvent) -> pd.DataFrame:
+def export_model_predictions(cloud_event: CloudEvent) -> None:
     """This function is triggered when a new object is created or an existing
     object is overwritten in the "climateiq-predictions" storage bucket.
 
@@ -23,13 +23,13 @@ def export_model_predictions(cloud_event: CloudEvent) -> pd.DataFrame:
         cloud_event: The CloudEvent representing the storage event. The name
         of the object should conform to the following pattern:
         "<prediction_type>/<model_id>/<study_area_name>/<scenario_id>/<chunk_id>"
-    Returns:
-        A DataFrame containing the lat/lon coordinates of cell centers in a
-        single chunk along with associated predictions, representing a
-        subset of the full study area results.
     Raises:
         ValueError: If the object name format, study area metadata, chunk
         area metadata or predictions file format is invalid.
+        NotImplementedError: The result which should be stored elsewhere. This is:
+            A DataFrame containing the lat/lon coordinates of cell centers in a
+            single chunk along with associated predictions, representing a
+            subset of the full study area results.
     """
     data = cloud_event.data
     object_name = data["name"]
@@ -40,17 +40,18 @@ def export_model_predictions(cloud_event: CloudEvent) -> pd.DataFrame:
     if len(path.parts) != 5:
         raise ValueError("Invalid object name format. Expected 5 components.")
 
-    prediction_type, model_id, study_area_name, scenario_id, chunk_id = (
-        path.parts
-    )
+    prediction_type, model_id, study_area_name, scenario_id, chunk_id = path.parts
 
     predictions = _read_chunk_predictions(bucket_name, object_name)
     study_area_metadata = _get_study_area_metadata(study_area_name)
     chunk_metadata = _get_chunk_metadata(study_area_metadata, chunk_id)
 
-    return _build_spatialized_model_predictions(
+    df = _build_spatialized_model_predictions(
         study_area_metadata, chunk_metadata, predictions
     )
+    # Set the error message to the DataFrame's json string. For testing
+    # purposes. In actual implementation, DataFrame should be stored somewhere.
+    raise NotImplementedError(df.to_json())
 
 
 # TODO: Modify this logic once CNN output schema is confirmed. Also update to
@@ -176,12 +177,10 @@ def _build_spatialized_model_predictions(
 
     # Calculate cell's center point in the source CRS.
     x_centers = (
-        chunk_metadata["x_ll_corner"]
-        + (cols + 0.5) * study_area_metadata["cell_size"]
+        chunk_metadata["x_ll_corner"] + (cols + 0.5) * study_area_metadata["cell_size"]
     )
     y_centers = (
-        chunk_metadata["y_ll_corner"]
-        + (rows + 0.5) * study_area_metadata["cell_size"]
+        chunk_metadata["y_ll_corner"] + (rows + 0.5) * study_area_metadata["cell_size"]
     )
     x_grid, y_grid = np.meshgrid(x_centers, y_centers)
 
