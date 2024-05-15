@@ -5,6 +5,8 @@ import pandas as pd
 import geopandas as gpd
 
 from cloudevents.http import CloudEvent
+from io import StringIO
+from pandas.testing import assert_frame_equal
 from unittest import mock
 
 
@@ -22,9 +24,7 @@ def test_export_model_predictions_invalid_object_name() -> None:
     with pytest.raises(ValueError) as exc_info:
         main.export_model_predictions(event)
 
-    assert "Invalid object name format. Expected 5 components." in str(
-        exc_info.value
-    )
+    assert "Invalid object name format. Expected 5 components." in str(exc_info.value)
 
 
 @mock.patch.object(main.storage, "Client", autospec=True)
@@ -38,8 +38,7 @@ def test_export_model_predictions_missing_study_area(
     }
     data = {
         "bucket": "climateiq-predictions",
-        "name": "prediction-type/model-id/study-area-name/scenario-id/"
-        "chunk-id",
+        "name": "prediction-type/model-id/study-area-name/scenario-id/chunk-id",
     }
     event = CloudEvent(attributes, data)
 
@@ -70,8 +69,7 @@ def test_export_model_predictions_invalid_study_area(
     }
     data = {
         "bucket": "climateiq-predictions",
-        "name": "prediction-type/model-id/study-area-name/scenario-id/"
-        "chunk-id",
+        "name": "prediction-type/model-id/study-area-name/scenario-id/chunk-id",
     }
     event = CloudEvent(attributes, data)
 
@@ -93,10 +91,9 @@ def test_export_model_predictions_invalid_study_area(
             }
         },
     }  # Missing "cell_size" required field
-    mock_firestore_client().collection().document().get() \
-        .to_dict.return_value = (
-            metadata
-        )
+    mock_firestore_client().collection().document().get().to_dict.return_value = (
+        metadata
+    )
 
     with pytest.raises(ValueError) as exc_info:
         main.export_model_predictions(event)
@@ -118,8 +115,7 @@ def test_export_model_predictions_missing_chunk(
     }
     data = {
         "bucket": "climateiq-predictions",
-        "name": "prediction-type/model-id/study-area-name/scenario-id/"
-        "chunk-id",
+        "name": "prediction-type/model-id/study-area-name/scenario-id/chunk-id",
     }
     event = CloudEvent(attributes, data)
 
@@ -142,10 +138,9 @@ def test_export_model_predictions_missing_chunk(
             }
         },
     }
-    mock_firestore_client().collection().document().get() \
-        .to_dict.return_value = (
-            metadata
-        )
+    mock_firestore_client().collection().document().get().to_dict.return_value = (
+        metadata
+    )
 
     with pytest.raises(ValueError) as exc_info:
         main.export_model_predictions(event)
@@ -164,8 +159,7 @@ def test_export_model_predictions_invalid_chunk(
     }
     data = {
         "bucket": "climateiq-predictions",
-        "name": "prediction-type/model-id/study-area-name/scenario-id/"
-        "chunk-id",
+        "name": "prediction-type/model-id/study-area-name/scenario-id/chunk-id",
     }
     event = CloudEvent(attributes, data)
 
@@ -187,18 +181,16 @@ def test_export_model_predictions_invalid_chunk(
             }
         },
     }  # Missing "row_count" required field
-    mock_firestore_client().collection().document().get() \
-        .to_dict.return_value = (
-            metadata
-        )
+    mock_firestore_client().collection().document().get().to_dict.return_value = (
+        metadata
+    )
 
     with pytest.raises(ValueError) as exc_info:
         main.export_model_predictions(event)
 
     assert (
         'Chunk "chunk-id" is missing one or more required '
-        "fields: row_count, col_count, x_ll_corner, y_ll_corner"
-        in str(exc_info.value)
+        "fields: row_count, col_count, x_ll_corner, y_ll_corner" in str(exc_info.value)
     )
 
 
@@ -213,8 +205,7 @@ def test_export_model_predictions_missing_predictions(
     }
     data = {
         "bucket": "climateiq-predictions",
-        "name": "prediction-type/model-id/study-area-name/scenario-id/"
-        "chunk-id",
+        "name": "prediction-type/model-id/study-area-name/scenario-id/chunk-id",
     }
     event = CloudEvent(attributes, data)
 
@@ -237,10 +228,9 @@ def test_export_model_predictions_missing_predictions(
             }
         },
     }
-    mock_firestore_client().collection().document().get() \
-        .to_dict.return_value = (
-            metadata
-        )
+    mock_firestore_client().collection().document().get().to_dict.return_value = (
+        metadata
+    )
 
     with pytest.raises(ValueError) as exc_info:
         main.export_model_predictions(event)
@@ -259,8 +249,7 @@ def test_export_model_predictions_too_many_predictions(
     }
     data = {
         "bucket": "climateiq-predictions",
-        "name": "prediction-type/model-id/study-area-name/scenario-id/"
-        "chunk-id",
+        "name": "prediction-type/model-id/study-area-name/scenario-id/chunk-id",
     }
     event = CloudEvent(attributes, data)
 
@@ -286,10 +275,9 @@ def test_export_model_predictions_too_many_predictions(
             }
         },
     }
-    mock_firestore_client().collection().document().get() \
-        .to_dict.return_value = (
-            metadata
-        )
+    mock_firestore_client().collection().document().get().to_dict.return_value = (
+        metadata
+    )
 
     with pytest.raises(ValueError) as exc_info:
         main.export_model_predictions(event)
@@ -299,17 +287,14 @@ def test_export_model_predictions_too_many_predictions(
 
 @mock.patch.object(main.storage, "Client", autospec=True)
 @mock.patch.object(main.firestore, "Client", autospec=True)
-def test_export_model_predictions(
-    mock_firestore_client, mock_storage_client
-) -> None:
+def test_export_model_predictions(mock_firestore_client, mock_storage_client) -> None:
     attributes = {
         "type": "google.cloud.storage.object.v1.finalized",
         "source": "source",
     }
     data = {
         "bucket": "climateiq-predictions",
-        "name": "prediction-type/model-id/study-area-name/scenario-id/"
-        "chunk-id",
+        "name": "prediction-type/model-id/study-area-name/scenario-id/chunk-id",
     }
     event = CloudEvent(attributes, data)
 
@@ -332,10 +317,9 @@ def test_export_model_predictions(
             }
         },
     }
-    mock_firestore_client().collection().document().get() \
-        .to_dict.return_value = (
-            metadata
-        )
+    mock_firestore_client().collection().document().get().to_dict.return_value = (
+        metadata
+    )
 
     # Build expected output data
     expected_x_coods = np.array([505, 515, 525, 505, 515, 525])
@@ -354,5 +338,7 @@ def test_export_model_predictions(
         }
     )
 
-    actual_df = main.export_model_predictions(event)
-    assert actual_df.equals(expected_df)
+    with pytest.raises(NotImplementedError) as exc_info:
+        main.export_model_predictions(event)
+
+    assert_frame_equal(pd.read_json(StringIO(str(exc_info.value))), expected_df)
