@@ -13,8 +13,8 @@ permissions:
   contents: read
 
 jobs:
-  cloud_functions:
-    name: cloud_functions CI
+  climateiq_data_export_cf:
+    name: climateiq_data_export_cf CI
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3

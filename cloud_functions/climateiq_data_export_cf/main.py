@@ -1,21 +1,24 @@
-import functions_framework
-import pathlib
 import json
-import geopandas as gpd
-import pandas as pd
-import numpy as np
 
-from cloudevents.http import CloudEvent
+from cloudevents import http
+import functions_framework
+import geopandas as gpd
 from google.cloud import firestore
 from google.cloud import storage
+from h3 import h3
+import pandas as pd
+import pathlib
+import numpy as np
 
-STUDY_AREAS_ID = "study_areas"
+
 GLOBAL_CRS = "EPSG:4326"
+H3_LEVEL = 13
+STUDY_AREAS_ID = "study_areas"
 
 
 # Triggered by the "object finalized" Cloud Storage event type.
 @functions_framework.cloud_event
-def export_model_predictions(cloud_event: CloudEvent) -> None:
+def export_model_predictions(cloud_event: http.CloudEvent) -> None:
     """This function is triggered when a new object is created or an existing
     object is overwritten in the "climateiq-predictions" storage bucket.
 
@@ -27,9 +30,7 @@ def export_model_predictions(cloud_event: CloudEvent) -> None:
         ValueError: If the object name format, study area metadata, chunk
         area metadata or predictions file format is invalid.
         NotImplementedError: The result which should be stored elsewhere. This is:
-            A DataFrame containing the lat/lon coordinates of cell centers in a
-            single chunk along with associated predictions, representing a
-            subset of the full study area results.
+            a Series of h3 indices to the aggregated prediction.
     """
     data = cloud_event.data
     object_name = data["name"]
@@ -49,9 +50,12 @@ def export_model_predictions(cloud_event: CloudEvent) -> None:
     df = _build_spatialized_model_predictions(
         study_area_metadata, chunk_metadata, predictions
     )
+
+    h3_series = _convert_to_h3(df)
+
     # Set the error message to the DataFrame's json string. For testing
     # purposes. In actual implementation, DataFrame should be stored somewhere.
-    raise NotImplementedError(df.to_json())
+    raise NotImplementedError(h3_series.to_json())
 
 
 # TODO: Modify this logic once CNN output schema is confirmed. Also update to
@@ -205,3 +209,21 @@ def _build_spatialized_model_predictions(
             "prediction": aligned_predictions,
         }
     )
+
+
+def _convert_to_h3(df: pd.DataFrame) -> pd.Series:
+    """Builds a Series of h3 indices to the aggregated prediction.
+
+    Args:
+        df: A pandas DataFrame containing the results of
+        _build_spatialized_model_predictions.
+    Returns:
+        A Series of h3 indices to the aggregated prediction for the lat/lon center
+        points which fall within each h3 cell.
+    """
+    df["h3"] = df.apply(
+        lambda row: h3.geo_to_h3(row["lat"], row["lon"], H3_LEVEL), axis=1
+    )
+    # TODO: Finalize which aggregation to calculate for each prediction type.
+    predictions = df.groupby(["h3"]).prediction.agg("max")
+    return predictions

@@ -1,12 +1,12 @@
-import main
-import pytest
-import numpy as np
-import pandas as pd
-import geopandas as gpd
-
-from cloudevents.http import CloudEvent
 from io import StringIO
-from pandas.testing import assert_frame_equal
+
+from cloudevents import http
+from google.cloud import firestore
+from google.cloud import storage
+import pandas as pd
+from pandas import testing as pd_testing
+import pytest
+import main
 from unittest import mock
 
 
@@ -19,7 +19,7 @@ def test_export_model_predictions_invalid_object_name() -> None:
         "bucket": "climateiq-predictions",
         "name": "invalid_name",  # Invalid object name
     }
-    event = CloudEvent(attributes, data)
+    event = http.CloudEvent(attributes, data)
 
     with pytest.raises(ValueError) as exc_info:
         main.export_model_predictions(event)
@@ -27,8 +27,8 @@ def test_export_model_predictions_invalid_object_name() -> None:
     assert "Invalid object name format. Expected 5 components." in str(exc_info.value)
 
 
-@mock.patch.object(main.storage, "Client", autospec=True)
-@mock.patch.object(main.firestore, "Client", autospec=True)
+@mock.patch.object(storage, "Client", autospec=True)
+@mock.patch.object(firestore, "Client", autospec=True)
 def test_export_model_predictions_missing_study_area(
     mock_firestore_client, mock_storage_client
 ) -> None:
@@ -40,7 +40,7 @@ def test_export_model_predictions_missing_study_area(
         "bucket": "climateiq-predictions",
         "name": "prediction-type/model-id/study-area-name/scenario-id/chunk-id",
     }
-    event = CloudEvent(attributes, data)
+    event = http.CloudEvent(attributes, data)
 
     # Build mock Storage object
     predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}\n'
@@ -58,8 +58,8 @@ def test_export_model_predictions_missing_study_area(
     assert 'Study area "study-area-name" does not exist' in str(exc_info.value)
 
 
-@mock.patch.object(main.storage, "Client", autospec=True)
-@mock.patch.object(main.firestore, "Client", autospec=True)
+@mock.patch.object(storage, "Client", autospec=True)
+@mock.patch.object(firestore, "Client", autospec=True)
 def test_export_model_predictions_invalid_study_area(
     mock_firestore_client, mock_storage_client
 ) -> None:
@@ -71,7 +71,7 @@ def test_export_model_predictions_invalid_study_area(
         "bucket": "climateiq-predictions",
         "name": "prediction-type/model-id/study-area-name/scenario-id/chunk-id",
     }
-    event = CloudEvent(attributes, data)
+    event = http.CloudEvent(attributes, data)
 
     # Build mock Storage object
     predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}\n'
@@ -104,8 +104,8 @@ def test_export_model_predictions_invalid_study_area(
     )
 
 
-@mock.patch.object(main.storage, "Client", autospec=True)
-@mock.patch.object(main.firestore, "Client", autospec=True)
+@mock.patch.object(storage, "Client", autospec=True)
+@mock.patch.object(firestore, "Client", autospec=True)
 def test_export_model_predictions_missing_chunk(
     mock_firestore_client, mock_storage_client
 ) -> None:
@@ -117,7 +117,7 @@ def test_export_model_predictions_missing_chunk(
         "bucket": "climateiq-predictions",
         "name": "prediction-type/model-id/study-area-name/scenario-id/chunk-id",
     }
-    event = CloudEvent(attributes, data)
+    event = http.CloudEvent(attributes, data)
 
     # Build mock Storage object
     predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}\n'
@@ -148,8 +148,8 @@ def test_export_model_predictions_missing_chunk(
     assert 'Chunk "chunk-id" does not exist' in str(exc_info.value)
 
 
-@mock.patch.object(main.storage, "Client", autospec=True)
-@mock.patch.object(main.firestore, "Client", autospec=True)
+@mock.patch.object(storage, "Client", autospec=True)
+@mock.patch.object(firestore, "Client", autospec=True)
 def test_export_model_predictions_invalid_chunk(
     mock_firestore_client, mock_storage_client
 ) -> None:
@@ -161,7 +161,7 @@ def test_export_model_predictions_invalid_chunk(
         "bucket": "climateiq-predictions",
         "name": "prediction-type/model-id/study-area-name/scenario-id/chunk-id",
     }
-    event = CloudEvent(attributes, data)
+    event = http.CloudEvent(attributes, data)
 
     # Build mock Storage object
     predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}\n'
@@ -194,8 +194,8 @@ def test_export_model_predictions_invalid_chunk(
     )
 
 
-@mock.patch.object(main.storage, "Client", autospec=True)
-@mock.patch.object(main.firestore, "Client", autospec=True)
+@mock.patch.object(storage, "Client", autospec=True)
+@mock.patch.object(firestore, "Client", autospec=True)
 def test_export_model_predictions_missing_predictions(
     mock_firestore_client, mock_storage_client
 ) -> None:
@@ -207,7 +207,7 @@ def test_export_model_predictions_missing_predictions(
         "bucket": "climateiq-predictions",
         "name": "prediction-type/model-id/study-area-name/scenario-id/chunk-id",
     }
-    event = CloudEvent(attributes, data)
+    event = http.CloudEvent(attributes, data)
 
     # Build mock Storage object
     predictions = ""
@@ -238,8 +238,8 @@ def test_export_model_predictions_missing_predictions(
     assert "Predictions file is missing predictions." in str(exc_info.value)
 
 
-@mock.patch.object(main.storage, "Client", autospec=True)
-@mock.patch.object(main.firestore, "Client", autospec=True)
+@mock.patch.object(storage, "Client", autospec=True)
+@mock.patch.object(firestore, "Client", autospec=True)
 def test_export_model_predictions_too_many_predictions(
     mock_firestore_client, mock_storage_client
 ) -> None:
@@ -251,7 +251,7 @@ def test_export_model_predictions_too_many_predictions(
         "bucket": "climateiq-predictions",
         "name": "prediction-type/model-id/study-area-name/scenario-id/chunk-id",
     }
-    event = CloudEvent(attributes, data)
+    event = http.CloudEvent(attributes, data)
 
     # Build mock Storage object
     predictions = (
@@ -285,8 +285,8 @@ def test_export_model_predictions_too_many_predictions(
     assert "Predictions file has too many predictions" in str(exc_info.value)
 
 
-@mock.patch.object(main.storage, "Client", autospec=True)
-@mock.patch.object(main.firestore, "Client", autospec=True)
+@mock.patch.object(storage, "Client", autospec=True)
+@mock.patch.object(firestore, "Client", autospec=True)
 def test_export_model_predictions(mock_firestore_client, mock_storage_client) -> None:
     attributes = {
         "type": "google.cloud.storage.object.v1.finalized",
@@ -296,7 +296,7 @@ def test_export_model_predictions(mock_firestore_client, mock_storage_client) ->
         "bucket": "climateiq-predictions",
         "name": "prediction-type/model-id/study-area-name/scenario-id/chunk-id",
     }
-    event = CloudEvent(attributes, data)
+    event = http.CloudEvent(attributes, data)
 
     # Build mock Storage object
     predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}\n'
@@ -322,23 +322,22 @@ def test_export_model_predictions(mock_firestore_client, mock_storage_client) ->
     )
 
     # Build expected output data
-    expected_x_coods = np.array([505, 515, 525, 505, 515, 525])
-    expected_y_coods = np.array([105, 105, 105, 115, 115, 115])
-    expected_gdf_src_crs = gpd.GeoDataFrame(
-        geometry=gpd.points_from_xy(expected_x_coods, expected_y_coods),
-        crs="EPSG:32618",
-    )
-    expected_gdf_global_crs = expected_gdf_src_crs.to_crs("EPSG:4326")
-    expected_predictions = [4, 5, 6, 1, 2, 3]
-    expected_df = pd.DataFrame(
+    expected_series = pd.Series(
         {
-            "lat": expected_gdf_global_crs.geometry.y,
-            "lon": expected_gdf_global_crs.geometry.x,
-            "prediction": expected_predictions,
+            "8d8f2c80c1582bf": 3.0,
+            "8d8f2c80c1586bf": 1.0,
+            "8d8f2c80c1586ff": 2.0,
+            "8d8f2c80c15b83f": 6.0,
+            "8d8f2c80c15bc3f": 4.0,
+            "8d8f2c80c15bd7f": 5.0,
         }
     )
 
     with pytest.raises(NotImplementedError) as exc_info:
         main.export_model_predictions(event)
 
-    assert_frame_equal(pd.read_json(StringIO(str(exc_info.value))), expected_df)
+    pd_testing.assert_series_equal(
+        pd.read_json(StringIO(str(exc_info.value)), typ="series"),
+        expected_series,
+        check_dtype=False,
+    )
