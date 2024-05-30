@@ -9,6 +9,8 @@ from h3 import h3
 import pandas as pd
 import pathlib
 import numpy as np
+from shapely.geometry import Polygon, Point
+
 
 
 GLOBAL_CRS = "EPSG:4326"
@@ -47,15 +49,15 @@ def export_model_predictions(cloud_event: http.CloudEvent) -> None:
     study_area_metadata = _get_study_area_metadata(study_area_name)
     chunk_metadata = _get_chunk_metadata(study_area_metadata, chunk_id)
 
-    df = _build_spatialized_model_predictions(
+    spatialized_predictions = _build_spatialized_model_predictions(
         study_area_metadata, chunk_metadata, predictions
     )
 
-    h3_series = _convert_to_h3(df)
+    h3_predictions = _calculate_h3_indexes(study_area_metadata, chunk_metadata, spatialized_predictions)
 
     # Set the error message to the DataFrame's json string. For testing
     # purposes. In actual implementation, DataFrame should be stored somewhere.
-    raise NotImplementedError(h3_series.to_json())
+    raise NotImplementedError(h3_predictions.to_json())
 
 
 # TODO: Modify this logic once CNN output schema is confirmed. Also update to
@@ -210,20 +212,79 @@ def _build_spatialized_model_predictions(
         }
     )
 
+def _add_h3_index_details(cell_row: pd.Series) -> pd.Series:
+    """Projects the cell centroid to an H3 index.
+    Args:
+        cell_row: A cell row containing the lat and lon of the cell centroid.
+    Returns:
+        A Series containing H3 information for the projected cell centroid.
 
-def _convert_to_h3(df: pd.DataFrame) -> pd.Series:
-    """Builds a Series of h3 indices to the aggregated prediction.
+    """
+    h3_index = h3.geo_to_h3(cell_row["lat"], cell_row["lon"], H3_LEVEL)
+    centroid_lat, centroid_lon = h3.h3_to_geo(h3_index)
+    boundary = h3.h3_to_geo_boundary(h3_index)
+    return pd.Series({
+        "h3_index": h3_index, 
+        "h3_centroid_lat": centroid_lat, 
+        "h3_centroid_lon": centroid_lon,
+        "h3_boundary": Polygon(boundary)
+    })
+
+def _get_chunk_boundary(study_area_metadata:dict, chunk_metadata: dict):
+    """Calculates the boundary points of the current chunk.
+    Args:
+        study_area_metadata: A dictionary containing metadata for the study
+        area.
+        chunk_metadata: A dictionary containing metadata for the chunk.
+    Returns:
+        A shapely.Polygon representing the current chunk.
+
+    """
+    x = chunk_metadata["x_ll_corner"]
+    y = chunk_metadata["y_ll_corner"]
+    num_rows = chunk_metadata["row_count"]
+    num_cols = chunk_metadata["col_count"]
+    cell_size = study_area_metadata["cell_size"]
+
+    boundary_points = [
+        (x, y),                                        # Lower-left
+        (x + num_cols * cell_size, y),                 # Lower-right
+        (x + num_cols * cell_size, y + num_rows * cell_size), # Upper-right
+        (x, y + num_rows * cell_size),                 # Upper-left
+    ]
+
+    gdf_src_crs = gpd.GeoDataFrame(
+        geometry=[Polygon(boundary_points)],
+        crs=study_area_metadata["crs"],
+    )
+    gdf_global_crs = gdf_src_crs.to_crs(GLOBAL_CRS)
+    return gdf_global_crs.geometry[0]
+
+def _calculate_h3_indexes(study_area_metadata: dict, chunk_metadata: dict, spatialized_predictions: pd.DataFrame) -> pd.DataFrame:
+    """Projects cell centroids to H3 indexes. Filters out cells that have H3 centroids outside of the current chunk and de-dupes duplicate H3 projections by using the average prediction value from overlapping cells.
 
     Args:
-        df: A pandas DataFrame containing the results of
-        _build_spatialized_model_predictions.
+        study_area_metadata: A dictionary containing metadata for the study
+        area.
+        chunk_metadata: A dictionary containing metadata for the chunk.
+        spatialized_predictions: A DataFrame containing the lat/lon coordinates of cell centers in a
+        single chunk along with associated predictions
     Returns:
-        A Series of h3 indices to the aggregated prediction for the lat/lon center
-        points which fall within each h3 cell.
+        A Series containing the mean prediction value for each H3 index.
+ 
     """
-    df["h3"] = df.apply(
-        lambda row: h3.geo_to_h3(row["lat"], row["lon"], H3_LEVEL), axis=1
+    # Calculate H3 information for each cell.
+    spatialized_predictions[["h3_index", "h3_centroid_lat", "h3_centroid_lon", "h3_boundary"]] = spatialized_predictions.apply(
+        _add_h3_index_details, axis=1
     )
-    # TODO: Finalize which aggregation to calculate for each prediction type.
-    predictions = df.groupby(["h3"]).prediction.agg("max")
-    return predictions
+
+    # Filter out any rows where the H3 centroid falls outside of the chunk boundary.
+    chunk_boundary = _get_chunk_boundary(study_area_metadata, chunk_metadata)
+    spatialized_predictions = spatialized_predictions[
+        spatialized_predictions.apply(lambda row: chunk_boundary.contains(Point(row["h3_centroid_lon"], row["h3_centroid_lat"])), axis=1)
+    ]
+
+    # TODO: Add logic for fetching predictions from neighboring chunks for boundary cells.
+    spatialized_predictions = spatialized_predictions.groupby(["h3_index"]).prediction.agg("mean")
+    return spatialized_predictions
+
