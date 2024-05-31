@@ -24,9 +24,7 @@ def test_export_model_predictions_invalid_object_name() -> None:
     with pytest.raises(ValueError) as exc_info:
         main.export_model_predictions(event)
 
-    assert "Invalid object name format. Expected 5 components." in str(
-        exc_info.value
-    )
+    assert "Invalid object name format. Expected 5 components." in str(exc_info.value)
 
 
 @mock.patch.object(storage, "Client", autospec=True)
@@ -192,8 +190,7 @@ def test_export_model_predictions_invalid_chunk(
 
     assert (
         'Chunk "chunk-id" is missing one or more required '
-        "fields: row_count, col_count, x_ll_corner, y_ll_corner"
-        in str(exc_info.value)
+        "fields: row_count, col_count, x_ll_corner, y_ll_corner" in str(exc_info.value)
     )
 
 
@@ -290,9 +287,7 @@ def test_export_model_predictions_too_many_predictions(
 
 @mock.patch.object(storage, "Client", autospec=True)
 @mock.patch.object(firestore, "Client", autospec=True)
-def test_export_model_predictions(
-    mock_firestore_client, mock_storage_client
-) -> None:
+def test_export_model_predictions(mock_firestore_client, mock_storage_client) -> None:
     attributes = {
         "type": "google.cloud.storage.object.v1.finalized",
         "source": "source",

@@ -42,9 +42,7 @@ def export_model_predictions(cloud_event: http.CloudEvent) -> None:
     if len(path.parts) != 5:
         raise ValueError("Invalid object name format. Expected 5 components.")
 
-    prediction_type, model_id, study_area_name, scenario_id, chunk_id = (
-        path.parts
-    )
+    prediction_type, model_id, study_area_name, scenario_id, chunk_id = path.parts
 
     predictions = _read_chunk_predictions(bucket_name, object_name)
     study_area_metadata = _get_study_area_metadata(study_area_name)
@@ -186,12 +184,10 @@ def _build_spatialized_model_predictions(
 
     # Calculate cell's center point in the source CRS.
     x_centers = (
-        chunk_metadata["x_ll_corner"]
-        + (cols + 0.5) * study_area_metadata["cell_size"]
+        chunk_metadata["x_ll_corner"] + (cols + 0.5) * study_area_metadata["cell_size"]
     )
     y_centers = (
-        chunk_metadata["y_ll_corner"]
-        + (rows + 0.5) * study_area_metadata["cell_size"]
+        chunk_metadata["y_ll_corner"] + (rows + 0.5) * study_area_metadata["cell_size"]
     )
     x_grid, y_grid = np.meshgrid(x_centers, y_centers)
 
