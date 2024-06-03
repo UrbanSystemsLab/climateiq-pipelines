@@ -5,11 +5,11 @@ import functions_framework
 import geopandas as gpd
 from google.cloud import firestore
 from google.cloud import storage
+from shapely import geometry
 from h3 import h3
 import pandas as pd
 import pathlib
 import numpy as np
-from shapely import geometry
 
 GLOBAL_CRS = "EPSG:4326"
 H3_LEVEL = 13
