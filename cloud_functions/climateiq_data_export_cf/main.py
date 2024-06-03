@@ -229,7 +229,6 @@ def _add_h3_index_details(cell: pd.Series) -> pd.Series:
 
     Returns:
         A Series containing H3 information for the projected cell centroid.
-
     """
     h3_index = h3.geo_to_h3(cell["lat"], cell["lon"], H3_LEVEL)
     centroid_lat, centroid_lon = h3.h3_to_geo(h3_index)
@@ -254,7 +253,6 @@ def _get_chunk_boundary(study_area_metadata: dict, chunk_metadata: dict):
 
     Returns:
         A shapely.Polygon representing the chunk.
-
     """
     min_x = chunk_metadata["x_ll_corner"]
     min_y = chunk_metadata["y_ll_corner"]
@@ -298,7 +296,6 @@ def _calculate_h3_indexes(
     Returns:
         A Series containing H3 indexes in a single chunk along with associated
         predictions, representing a subset of the full study area results.
-
     """
     # Calculate H3 information for each cell.
     spatialized_predictions[
