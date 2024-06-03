@@ -9,8 +9,7 @@ from h3 import h3
 import pandas as pd
 import pathlib
 import numpy as np
-from shapely.geometry import Polygon, Point
-
+from shapely import geometry
 
 GLOBAL_CRS = "EPSG:4326"
 H3_LEVEL = 13
@@ -27,6 +26,7 @@ def export_model_predictions(cloud_event: http.CloudEvent) -> None:
         cloud_event: The CloudEvent representing the storage event. The name
         of the object should conform to the following pattern:
         "<prediction_type>/<model_id>/<study_area_name>/<scenario_id>/<chunk_id>"
+
     Raises:
         ValueError: If the object name format, study area metadata, chunk
         area metadata or predictions file format is invalid.
@@ -71,8 +71,10 @@ def _read_chunk_predictions(bucket_name: str, object_name: str) -> np.ndarray:
         bucket_name (str): The name of the GCS bucket containing the chunk
         object.
         object_name (str): The name of the chunk object to read.
+
     Returns:
         np.ndarray: A 2D array containing the model predictions for the chunk.
+
     Raises:
         ValueError: If the predictions file format is invalid.
     """
@@ -101,8 +103,10 @@ def _get_study_area_metadata(study_area_name: str) -> dict:
 
     Args:
         study_area_name: The name of the study area to retrieve metadata for.
+
     Returns:
         A dictionary containing metadata for the study area.
+
     Raises:
         ValueError: If the study area does not exist or its metadata is
         missing required fields.
@@ -137,8 +141,10 @@ def _get_chunk_metadata(study_area_metadata: dict, chunk_id: str) -> dict:
         study_area_metadata: A dictionary containing metadata for the
         study area.
         chunk_id: The unique identifier of the chunk to retrieve metadata for.
+
     Returns:
         A dictionary containing metadata for the chunk.
+
     Raises:
         ValueError: If the specified chunk does not exist or its metadata is
         missing required fields.
@@ -174,6 +180,7 @@ def _build_spatialized_model_predictions(
         area.
         chunk_metadata: A dictionary containing metadata for the chunk.
         predictions: A 2D array containing the model predictions for the chunk.
+
     Returns:
         A DataFrame containing the lat/lon coordinates of cell centroids in a
         single chunk along with associated predictions, representing a
@@ -216,8 +223,10 @@ def _build_spatialized_model_predictions(
 
 def _add_h3_index_details(cell: pd.Series) -> pd.Series:
     """Projects the cell centroid to a H3 index.
+
     Args:
         cell: A cell row containing the lat and lon of the cell centroid.
+
     Returns:
         A Series containing H3 information for the projected cell centroid.
 
@@ -230,37 +239,38 @@ def _add_h3_index_details(cell: pd.Series) -> pd.Series:
             "h3_index": h3_index,
             "h3_centroid_lat": centroid_lat,
             "h3_centroid_lon": centroid_lon,
-            "h3_boundary": Polygon(boundary_xy),
+            "h3_boundary": geometry.Polygon(boundary_xy),
         }
     )
 
 
 def _get_chunk_boundary(study_area_metadata: dict, chunk_metadata: dict):
     """Calculates the boundary points of the chunk.
+
     Args:
         study_area_metadata: A dictionary containing metadata for the study
         area.
         chunk_metadata: A dictionary containing metadata for the chunk.
+
     Returns:
         A shapely.Polygon representing the chunk.
 
     """
-    x = chunk_metadata["x_ll_corner"]
-    y = chunk_metadata["y_ll_corner"]
-    num_rows = chunk_metadata["row_count"]
-    num_cols = chunk_metadata["col_count"]
-    cell_size = study_area_metadata["cell_size"]
+    min_x = chunk_metadata["x_ll_corner"]
+    min_y = chunk_metadata["y_ll_corner"]
+    max_x = min_x + chunk_metadata["col_count"] * study_area_metadata["cell_size"]
+    max_y = min_y + chunk_metadata["row_count"] * study_area_metadata["cell_size"]
 
     boundary_points = [
-        (x, y),  # Lower-left
-        (x + num_cols * cell_size, y),  # Lower-right
-        (x + num_cols * cell_size, y + num_rows * cell_size),  # Upper-right
-        (x, y + num_rows * cell_size),  # Upper-left
-        (x, y),  # Close the boundary
+        (min_x, min_y),
+        (max_x, min_y),
+        (max_x, max_y),
+        (min_x, max_y),
+        (min_x, min_y)
     ]
 
     gdf_src_crs = gpd.GeoDataFrame(
-        geometry=[Polygon(boundary_points)],
+        geometry=[geometry.Polygon(boundary_points)],
         crs=study_area_metadata["crs"],
     )
     gdf_global_crs = gdf_src_crs.to_crs(GLOBAL_CRS)
@@ -272,9 +282,11 @@ def _calculate_h3_indexes(
     chunk_metadata: dict,
     spatialized_predictions: pd.DataFrame,
 ) -> pd.Series:
-    """Projects cell centroids to H3 indexes. Filters out cells that have projected H3
-    centroids outside of the current chunk and de-dupes duplicate H3 projections by
-    using the average prediction value from overlapping cells.
+    """Projects cell centroids to H3 indexes.
+
+    Filters out cells that have projected H3 centroids outside of the current
+    chunk and de-dupes duplicate H3 projections by using the average prediction
+    value from overlapping cells.
 
     Args:
         study_area_metadata: A dictionary containing metadata for the study
@@ -282,6 +294,7 @@ def _calculate_h3_indexes(
         chunk_metadata: A dictionary containing metadata for the chunk.
         spatialized_predictions: A DataFrame containing the lat/lon coordinates of cell
         centroids in a single chunk along with associated predictions
+
     Returns:
         A Series containing H3 indexes in a single chunk along with associated
         predictions, representing a subset of the full study area results.
@@ -298,7 +311,7 @@ def _calculate_h3_indexes(
     spatialized_predictions = spatialized_predictions[
         spatialized_predictions.apply(
             lambda cell: chunk_boundary.contains(
-                Point(cell["h3_centroid_lon"], cell["h3_centroid_lat"])
+                geometry.Point(cell["h3_centroid_lon"], cell["h3_centroid_lat"])
             ),
             axis=1,
         )
