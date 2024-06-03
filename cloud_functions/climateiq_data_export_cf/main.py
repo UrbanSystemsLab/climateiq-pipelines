@@ -266,7 +266,7 @@ def _get_chunk_boundary(study_area_metadata: dict, chunk_metadata: dict):
         (max_x, min_y),
         (max_x, max_y),
         (min_x, max_y),
-        (min_x, min_y)
+        (min_x, min_y),
     ]
 
     gdf_src_crs = gpd.GeoDataFrame(
