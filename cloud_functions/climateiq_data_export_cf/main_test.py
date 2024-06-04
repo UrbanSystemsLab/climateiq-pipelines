@@ -88,6 +88,8 @@ def test_export_model_predictions_invalid_study_area(
                 "col_count": 3,
                 "x_ll_corner": 500,
                 "y_ll_corner": 100,
+                "x_index": 0,
+                "y_index": 0
             }
         },
     }  # Missing "cell_size" required field
@@ -135,6 +137,8 @@ def test_export_model_predictions_missing_chunk(
                 "col_count": 3,
                 "x_ll_corner": 500,
                 "y_ll_corner": 100,
+                "x_index": 0,
+                "y_index": 0
             }
         },
     }
@@ -178,6 +182,8 @@ def test_export_model_predictions_invalid_chunk(
                 "col_count": 3,
                 "x_ll_corner": 500,
                 "y_ll_corner": 100,
+                "x_index": 0,
+                "y_index": 0
             }
         },
     }  # Missing "row_count" required field
@@ -225,6 +231,8 @@ def test_export_model_predictions_missing_predictions(
                 "col_count": 3,
                 "x_ll_corner": 500,
                 "y_ll_corner": 100,
+                "x_index": 0,
+                "y_index": 0
             }
         },
     }
@@ -272,6 +280,8 @@ def test_export_model_predictions_too_many_predictions(
                 "col_count": 3,
                 "x_ll_corner": 500,
                 "y_ll_corner": 100,
+                "x_index": 0,
+                "y_index": 0
             }
         },
     }
@@ -316,6 +326,8 @@ def test_export_model_predictions_h3_centroids_within_chunk(
                 "col_count": 3,
                 "x_ll_corner": 500,
                 "y_ll_corner": 100,
+                "x_index": 0,
+                "y_index": 0
             }
         },
     }
@@ -378,6 +390,8 @@ def test_export_model_predictions_h3_centroids_outside_chunk(
                 "col_count": 6,
                 "x_ll_corner": 500,
                 "y_ll_corner": 100,
+                "x_index": 0,
+                "y_index": 0
             }
         },
     }

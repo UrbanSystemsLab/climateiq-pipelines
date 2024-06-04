@@ -14,6 +14,9 @@ import numpy as np
 GLOBAL_CRS = "EPSG:4326"
 H3_LEVEL = 13
 STUDY_AREAS_ID = "study_areas"
+CHUNKS_ID = "chunks"
+
+chunks_ref = None
 
 
 # Triggered by the "object finalized" Cloud Storage event type.
@@ -115,6 +118,7 @@ def _get_study_area_metadata(study_area_name: str) -> dict:
     db = firestore.Client()
 
     study_area_ref = db.collection(STUDY_AREAS_ID).document(study_area_name)
+    chunks_ref = study_area_ref.collection(CHUNKS_ID)
     study_area_doc = study_area_ref.get()
 
     if not study_area_doc.exists:
@@ -160,10 +164,12 @@ def _get_chunk_metadata(study_area_metadata: dict, chunk_id: str) -> dict:
         or chunk_metadata.get("col_count") is None
         or chunk_metadata.get("x_ll_corner") is None
         or chunk_metadata.get("y_ll_corner") is None
+        or chunk_metadata["x_index"] is None
+        or chunk_metadata["y_index"] is None
     ):
         raise ValueError(
             f'Chunk "{chunk_id}" is missing one or more required fields: '
-            "row_count, col_count, x_ll_corner, y_ll_corner"
+            "row_count, col_count, x_ll_corner, y_ll_corner, x_index, y_index"
         )
 
     return chunk_metadata
@@ -310,9 +316,17 @@ def _calculate_h3_indexes(
             lambda cell: chunk_boundary.contains(
                 geometry.Point(cell["h3_centroid_lon"], cell["h3_centroid_lat"])
             ),
-            axis=1,
+         axis=1,
         )
     ]
+    
+    # Extract cells where the projected H3 cell is not fully contained within the chunk.
+    boundary_h3_cells = spatialized_predictions[
+        spatialized_predictions.apply(
+            lambda row: not row["h3_boundary"].within(chunk_boundary),
+            axis=1,  
+        )
+    ].groupby(["h3_index"]).prediction.agg("mean")
 
     # TODO: Add logic for fetching predictions from neighboring chunks for boundary
     # cells.
@@ -320,3 +334,52 @@ def _calculate_h3_indexes(
         ["h3_index"]
     ).prediction.agg("mean")
     return spatialized_predictions
+
+def _get_neighboring_chunks(study_area_metadata: dict, chunk_metadata: dict, boundary_h3_cells: pd.DataFrame):
+    x = chunk_metadata["x_index"]
+    y = chunk_metadata["y_index"]
+
+    neighbors = {(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)}
+    queue = queue.Queue()
+    for neighbor in neighbors:
+        queue.put(neighbor)
+    
+    while not queue.empty():
+        neighbor_x, neighbor_y = queue.get()
+        query = chunks_ref.where("x_index", "==", neighbor_x).where("y_index", "==", neighbor_y).limit(1)
+        chunk_doc = query.get()
+        if not chunk_doc.exists:
+            # Some chunks may not have neighbors in the study area.
+            continue
+
+        neighbor_chunk_metadata = chunk_doc.to_dict()
+        if (
+            neighbor_chunk_metadata.get("id") is None
+            or neighbor_chunk_metadata.get("row_count") is None
+            or neighbor_chunk_metadata.get("col_count") is None
+            or neighbor_chunk_metadata.get("x_ll_corner") is None
+            or neighbor_chunk_metadata.get("y_ll_corner") is None
+            or neighbor_chunk_metadata["x_index"] is None
+            or neighbor_chunk_metadata["y_index"] is None
+        ):
+            raise ValueError(
+                f'Neighbor chunk "{neighbor_chunk_metadata["id"]}" is missing one or more required fields: '
+                "id, row_count, col_count, x_ll_corner, y_ll_corner, x_index, y_index"
+            )
+
+        neighbor_chunk_boundary = _get_chunk_boundary(study_area_metadata, neighbor_chunk_metadata)
+        is_overlapping = False
+        for row in boundary_h3_cells.iterrows():
+            if not row["h3_boundary"].within(neighbor_chunk_boundary):
+                is_overlapping = True
+                break  # Once an overlap is found, no need to check further
+        
+        if (is_overlapping):
+            queue.put((neighbor_x - 1, neighbor_y))
+            queue.put((neighbor_x + 1, neighbor_y))
+            queue.put((neighbor_x, neighbor_y - 1))
+            queue.put((neighbor_x, neighbor_y + 1))
+            # TODO: For each overlapping neighbor chunk: 
+            # 1. Read predictions from GCS
+            # 2. Build spatialized predictions
+            # 3. Project H3 cells and extract overlapping cells with current cell
