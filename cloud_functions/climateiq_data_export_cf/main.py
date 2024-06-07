@@ -127,9 +127,9 @@ def _read_neighbor_chunk_predictions(
     path = pathlib.PurePosixPath(object_name)
     if len(path.parts) != 5:
         raise ValueError("Invalid object name format. Expected 5 components.")
-    prefix, current_chunk_id = path.parts
-    neighbor_object_name = pathlib.PurePosixPath(prefix, neighbor_chunk_id)
-    return _read_chunk_predictions(bucket_name, neighbor_object_name)
+    *prefix, current_chunk_id = path.parts
+    neighbor_object_name = pathlib.PurePosixPath(*prefix, neighbor_chunk_id)
+    return _read_chunk_predictions(bucket_name, str(neighbor_object_name))
 
 
 def _get_study_area_metadata(study_area_name: str) -> dict:
@@ -431,6 +431,8 @@ def _aggregate_h3_predictions(
             >= study_area_metadata["row_count"]
         ):
             # Chunk is outside the study area boundary.
+            continue
+        if chunks_ref is None:
             continue
         query = (
             chunks_ref.where("x_index", "==", neighbor_x)
