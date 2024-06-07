@@ -1,5 +1,4 @@
 import json
-import queue
 
 from cloudevents import http
 import functions_framework
@@ -13,6 +12,7 @@ import pathlib
 import numpy as np
 
 GLOBAL_CRS = "EPSG:4326"
+# CAUTION: Changing the H3 cell size may require updates to how many/which neighboring chunks we process.
 H3_LEVEL = 13
 STUDY_AREAS_ID = "study_areas"
 CHUNKS_ID = "chunks"
@@ -57,7 +57,7 @@ def export_model_predictions(cloud_event: http.CloudEvent) -> None:
     )
 
     h3_predictions = _calculate_h3_indexes(
-        study_area_metadata, chunk_metadata, spatialized_predictions
+        study_area_metadata, chunk_metadata, spatialized_predictions, bucket_name, object_name
     )
 
     # Set the error message to the Series' json string for testing
@@ -165,8 +165,8 @@ def _get_chunk_metadata(study_area_metadata: dict, chunk_id: str) -> dict:
         or chunk_metadata.get("col_count") is None
         or chunk_metadata.get("x_ll_corner") is None
         or chunk_metadata.get("y_ll_corner") is None
-        or chunk_metadata["x_index"] is None
-        or chunk_metadata["y_index"] is None
+        or chunk_metadata.get("x_index") is None
+        or chunk_metadata.get("y_index") is None
     ):
         raise ValueError(
             f'Chunk "{chunk_id}" is missing one or more required fields: '
@@ -285,7 +285,7 @@ def _get_chunk_boundary(study_area_metadata: dict, chunk_metadata: dict):
 def _calculate_h3_indexes(
     study_area_metadata: dict,
     chunk_metadata: dict,
-    spatialized_predictions: pd.DataFrame,
+    spatialized_predictions: pd.DataFrame, bucket_name: str, object_name: str
 ) -> pd.Series:
     """Projects cell centroids to H3 indexes.
 
@@ -333,28 +333,30 @@ def _calculate_h3_indexes(
         .groupby(["h3_index"])
         .prediction.agg("mean")
     )
-
-    # TODO: Add logic for fetching predictions from neighboring chunks for boundary
-    # cells.
-    spatialized_predictions = spatialized_predictions.groupby(
-        ["h3_index"]
-    ).prediction.agg("mean")
-    return spatialized_predictions
+    return _aggregate_predictions(study_area_metadata, chunk_metadata, boundary_h3_cells, spatialized_predictions)
 
 
-def _get_neighboring_chunks(
-    study_area_metadata: dict, chunk_metadata: dict, boundary_h3_cells: pd.DataFrame
+def _aggregate_predictions(
+    study_area_metadata: dict, chunk_metadata: dict, boundary_h3_cells: pd.DataFrame, spatialized_predictions: pd.DataFrame, bucket_name: str, object_name: str
 ):
     x = chunk_metadata["x_index"]
     y = chunk_metadata["y_index"]
 
-    neighbors = {(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)}
-    queue = queue.Queue()
-    for neighbor in neighbors:
-        queue.put(neighbor)
-
-    while not queue.empty():
-        neighbor_x, neighbor_y = queue.get()
+    # Process direct 8 neighbors of current chunk. Since H3 cells at resolution 13 (43.870 m^2)
+    # have a smaller area than chunks (), it is guaranteed that any overlapping H3 cells
+    # from the current chunk are contained within these neighbors.
+    # TODO: Dynamically determine which neighbors to process based on chunk/H3 boundaries.
+    neighbors = {
+        (x - 1, y + 1),
+        (x, y + 1),
+        (x + 1, y + 1),
+        (x - 1, y),
+        (x + 1, y),
+        (x - 1, y - 1),
+        (x, y - 1),
+        (x + 1, y - 1),
+    }
+    for neighbor_x, neighbor_y in neighbors:
         query = (
             chunks_ref.where("x_index", "==", neighbor_x)
             .where("y_index", "==", neighbor_y)
@@ -372,8 +374,8 @@ def _get_neighboring_chunks(
             or neighbor_chunk_metadata.get("col_count") is None
             or neighbor_chunk_metadata.get("x_ll_corner") is None
             or neighbor_chunk_metadata.get("y_ll_corner") is None
-            or neighbor_chunk_metadata["x_index"] is None
-            or neighbor_chunk_metadata["y_index"] is None
+            or neighbor_chunk_metadata.get("x_index") is None
+            or neighbor_chunk_metadata.get("y_index") is None
         ):
             raise ValueError(
                 f'Neighbor chunk "{neighbor_chunk_metadata["id"]}" is missing one or more required '
@@ -389,12 +391,25 @@ def _get_neighboring_chunks(
                 intersects = True
                 break  # Once an overlap is found, no need to check further
 
-        if intersects:
-            queue.put((neighbor_x - 1, neighbor_y))
-            queue.put((neighbor_x + 1, neighbor_y))
-            queue.put((neighbor_x, neighbor_y - 1))
-            queue.put((neighbor_x, neighbor_y + 1))
-            # TODO: For each overlapping neighbor chunk:
-            # 1. Read predictions from GCS
-            # 2. Build spatialized predictions
-            # 3. Project H3 cells and extract intersecting cells
+        path = pathlib.PurePosixPath(object_name)
+        if len(path.parts) != 5:
+            raise ValueError("Invalid object name format. Expected 5 components.")
+        *prefix, old_chunk_id = path.parts  # Unpack all but the last component
+        new_path = pathlib.PurePosixPath(*prefix, neighbor_chunk_metadata.get("id"))
+        neighbor_chunk_predictions = _read_chunk_predictions(bucket_name, new_path)
+        neighbor_chunk_spatialized_predictions =_build_spatialized_model_predictions(study_area_metadata, neighbor_chunk_metadata, neighbor_chunk_predictions)
+        neighbor_chunk_spatialized_predictions[
+            ["h3_index", "h3_centroid_lat", "h3_centroid_lon", "h3_boundary"]
+        ] = neighbor_chunk_spatialized_predictions.apply(_add_h3_index_details, axis=1)
+        boundary_h3_set = set(boundary_h3_cells['h3_index'])
+
+        # 2. Filter the rows using a boolean mask
+        filtered_predictions = neighbor_chunk_spatialized_predictions[
+            neighbor_chunk_spatialized_predictions['h3_index'].isin(boundary_h3_set)
+        ]
+                
+
+    spatialized_predictions = spatialized_predictions.groupby(
+        ["h3_index"]
+    ).prediction.agg("mean")
+    return spatialized_predictions
