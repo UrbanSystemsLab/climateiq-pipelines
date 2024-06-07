@@ -361,15 +361,13 @@ def _calculate_h3_indexes(
 
     # Extract rows where the projected H3 cell is not fully contained within the chunk
     # so we can aggregate prediction values across chunk boundaries.
-    boundary_h3_cells = (
+    boundary_h3_cells = set(
         spatialized_predictions[
             spatialized_predictions.apply(
                 lambda row: not row["h3_boundary"].within(chunk_boundary),
                 axis=1,
             )
-        ]
-        .groupby(["h3_index"])
-        .prediction.agg("mean")
+        ]["h3_boundary"]
     )
 
     return _aggregate_h3_predictions(
@@ -396,8 +394,8 @@ def _aggregate_h3_predictions(
         study_area_metadata: A dictionary containing metadata for the study
         area.
         chunk_metadata: A dictionary containing metadata for the chunk.
-        boundary_h3_cells: A DataFrame containing H3 indexes that intersect with the
-        chunk boundary.
+        boundary_h3_cells: A set containing the H3 boundaries of cells that
+        intersect with the chunk boundary.
         spatialized_predictions: A DataFrame containing H3 indexes and predictions
         for a single chunk. This input DataFrame may contain duplicate H3 indexes.
         bucket_name: The name of the GCS bucket containing model predictions.
@@ -467,8 +465,8 @@ def _aggregate_h3_predictions(
             study_area_metadata, neighbor_chunk_metadata
         )
         intersects = False
-        for row in boundary_h3_cells.iterrows():
-            if row["h3_boundary"].intersects(neighbor_chunk_boundary):
+        for h3_boundary in boundary_h3_cells:
+            if h3_boundary.intersects(neighbor_chunk_boundary):
                 intersects = True
                 break
 

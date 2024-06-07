@@ -82,6 +82,8 @@ def test_export_model_predictions_invalid_study_area(
     metadata = {
         "name": "study_area_name",
         "crs": "EPSG:32618",
+        "row_count": 2,
+        "col_count": 3,
         "chunks": {
             "chunk-id": {
                 "row_count": 2,
@@ -131,6 +133,8 @@ def test_export_model_predictions_missing_chunk(
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
+        "row_count": 2,
+        "col_count": 3,
         "chunks": {
             "missing-chunk-id": {
                 "row_count": 2,
@@ -177,6 +181,8 @@ def test_export_model_predictions_invalid_chunk(
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
+        "row_count": 2,
+        "col_count": 3,
         "chunks": {
             "chunk-id": {
                 "col_count": 3,
@@ -225,6 +231,8 @@ def test_export_model_predictions_missing_predictions(
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
+        "row_count": 2,
+        "col_count": 3,
         "chunks": {
             "chunk-id": {
                 "row_count": 2,
@@ -274,6 +282,8 @@ def test_export_model_predictions_too_many_predictions(
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
+        "row_count": 2,
+        "col_count": 3,
         "chunks": {
             "chunk-id": {
                 "row_count": 2,
@@ -320,6 +330,8 @@ def test_export_model_predictions_h3_centroids_within_chunk(
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
+        "row_count": 2,
+        "col_count": 3,
         "chunks": {
             "chunk-id": {
                 "row_count": 2,
@@ -384,6 +396,8 @@ def test_export_model_predictions_h3_centroids_outside_chunk(
         "name": "study_area_name",
         "cell_size": 5,
         "crs": "EPSG:32618",
+        "row_count": 2,
+        "col_count": 3,
         "chunks": {
             "chunk-id": {
                 "row_count": 4,
