@@ -12,7 +12,8 @@ import pathlib
 import numpy as np
 
 GLOBAL_CRS = "EPSG:4326"
-# CAUTION: Changing the H3 cell size may require updates to how many/which neighboring chunks we process.
+# CAUTION: Changing the H3 cell size may require updates to how many/which neighboring
+# chunks we process.
 H3_LEVEL = 13
 STUDY_AREAS_ID = "study_areas"
 CHUNKS_ID = "chunks"
@@ -57,7 +58,11 @@ def export_model_predictions(cloud_event: http.CloudEvent) -> None:
     )
 
     h3_predictions = _calculate_h3_indexes(
-        study_area_metadata, chunk_metadata, spatialized_predictions, bucket_name, object_name
+        study_area_metadata,
+        chunk_metadata,
+        spatialized_predictions,
+        bucket_name,
+        object_name,
     )
 
     # Set the error message to the Series' json string for testing
@@ -72,12 +77,11 @@ def _read_chunk_predictions(bucket_name: str, object_name: str) -> np.ndarray:
     these predictions in a 2D array.
 
     Args:
-        bucket_name (str): The name of the GCS bucket containing the chunk
-        object.
-        object_name (str): The name of the chunk object to read.
+        bucket_name: The name of the GCS bucket containing the predictions.
+        object_name: The name of the chunk object to read.
 
     Returns:
-        np.ndarray: A 2D array containing the model predictions for the chunk.
+        A 2D array containing the model predictions for the chunk.
 
     Raises:
         ValueError: If the predictions file format is invalid.
@@ -102,6 +106,32 @@ def _read_chunk_predictions(bucket_name: str, object_name: str) -> np.ndarray:
     return np.array(prediction)
 
 
+def _read_neighbor_chunk_predictions(
+    bucket_name: str, object_name: str, neighbor_chunk_id: str
+) -> np.ndarray:
+    """Reads model predictions for a neighbor chunk from GCS and outputs
+    these predictions in a 2D array.
+
+    Args:
+        bucket_name: The name of the GCS bucket containing the predictions.
+        object_name: The name of the chunk object this cloud function is currently
+        processing. Used to construct the object name of the neighbor chunk.
+        neighbor_chunk_id: The id of the neighbor chunk object to read.
+
+    Returns:
+        A 2D array containing the model predictions for the neighbor chunk.
+
+    Raises:
+        ValueError: If the predictions file format is invalid.
+    """
+    path = pathlib.PurePosixPath(object_name)
+    if len(path.parts) != 5:
+        raise ValueError("Invalid object name format. Expected 5 components.")
+    prefix, current_chunk_id = path.parts
+    neighbor_object_name = pathlib.PurePosixPath(prefix, neighbor_chunk_id)
+    return _read_chunk_predictions(bucket_name, neighbor_object_name)
+
+
 def _get_study_area_metadata(study_area_name: str) -> dict:
     """Retrieves metadata for a given study area from Firestore.
 
@@ -119,6 +149,7 @@ def _get_study_area_metadata(study_area_name: str) -> dict:
     db = firestore.Client()
 
     study_area_ref = db.collection(STUDY_AREAS_ID).document(study_area_name)
+    global chunks_ref
     chunks_ref = study_area_ref.collection(CHUNKS_ID)
     study_area_doc = study_area_ref.get()
 
@@ -130,10 +161,12 @@ def _get_study_area_metadata(study_area_name: str) -> dict:
         study_area_metadata.get("cell_size") is None
         or study_area_metadata.get("crs") is None
         or study_area_metadata.get("chunks") is None
+        or study_area_metadata.get("row_count") is None
+        or study_area_metadata.get("col_count") is None
     ):
         raise ValueError(
             f'Study area "{study_area_name}" is missing one or more required '
-            "fields: cell_size, crs, chunks"
+            "fields: cell_size, crs, chunks, row_count, col_count"
         )
 
     return study_area_metadata
@@ -145,7 +178,7 @@ def _get_chunk_metadata(study_area_metadata: dict, chunk_id: str) -> dict:
     Args:
         study_area_metadata: A dictionary containing metadata for the
         study area.
-        chunk_id: The unique identifier of the chunk to retrieve metadata for.
+        chunk_id: The id of the chunk to retrieve metadata for.
 
     Returns:
         A dictionary containing metadata for the chunk.
@@ -285,7 +318,9 @@ def _get_chunk_boundary(study_area_metadata: dict, chunk_metadata: dict):
 def _calculate_h3_indexes(
     study_area_metadata: dict,
     chunk_metadata: dict,
-    spatialized_predictions: pd.DataFrame, bucket_name: str, object_name: str
+    spatialized_predictions: pd.DataFrame,
+    bucket_name: str,
+    object_name: str,
 ) -> pd.Series:
     """Projects cell centroids to H3 indexes.
 
@@ -299,6 +334,9 @@ def _calculate_h3_indexes(
         chunk_metadata: A dictionary containing metadata for the chunk.
         spatialized_predictions: A DataFrame containing the lat/lon coordinates of cell
         centroids in a single chunk along with associated predictions
+        bucket_name: The name of the GCS bucket containing model predictions.
+        object_name: The name of the chunk object this cloud function is currently
+        processing. Used to construct the GCS object name of the neighbor chunk.
 
     Returns:
         A Series containing H3 indexes in a single chunk along with associated
@@ -314,8 +352,8 @@ def _calculate_h3_indexes(
     chunk_boundary = _get_chunk_boundary(study_area_metadata, chunk_metadata)
     spatialized_predictions = spatialized_predictions[
         spatialized_predictions.apply(
-            lambda cell: chunk_boundary.contains(
-                geometry.Point(cell["h3_centroid_lon"], cell["h3_centroid_lat"])
+            lambda row: chunk_boundary.contains(
+                geometry.Point(row["h3_centroid_lon"], row["h3_centroid_lat"])
             ),
             axis=1,
         )
@@ -333,19 +371,49 @@ def _calculate_h3_indexes(
         .groupby(["h3_index"])
         .prediction.agg("mean")
     )
-    return _aggregate_predictions(study_area_metadata, chunk_metadata, boundary_h3_cells, spatialized_predictions)
+
+    return _aggregate_h3_predictions(
+        study_area_metadata,
+        chunk_metadata,
+        boundary_h3_cells,
+        spatialized_predictions,
+        bucket_name,
+        object_name,
+    )
 
 
-def _aggregate_predictions(
-    study_area_metadata: dict, chunk_metadata: dict, boundary_h3_cells: pd.DataFrame, spatialized_predictions: pd.DataFrame, bucket_name: str, object_name: str
-):
+def _aggregate_h3_predictions(
+    study_area_metadata: dict,
+    chunk_metadata: dict,
+    boundary_h3_cells: pd.DataFrame,
+    spatialized_predictions: pd.DataFrame,
+    bucket_name: str,
+    object_name: str,
+) -> pd.Series:
+    """Aggregates predictions for duplicate H3 projections across chunk boundaries.
+
+    Args:
+        study_area_metadata: A dictionary containing metadata for the study
+        area.
+        chunk_metadata: A dictionary containing metadata for the chunk.
+        boundary_h3_cells: A DataFrame containing H3 indexes that intersect with the
+        chunk boundary.
+        spatialized_predictions: A DataFrame containing H3 indexes and predictions
+        for a single chunk. This input DataFrame may contain duplicate H3 indexes.
+        bucket_name: The name of the GCS bucket containing model predictions.
+        object_name: The name of the chunk object this cloud function is currently
+        processing. Used to construct the GCS object name of the neighbor chunk.
+
+    Returns:
+        A Series containing H3 indexes in a single chunk along with associated
+        predictions, representing a subset of the full study area results.
+    """
     x = chunk_metadata["x_index"]
     y = chunk_metadata["y_index"]
 
-    # Process direct 8 neighbors of current chunk. Since H3 cells at resolution 13 (43.870 m^2)
-    # have a smaller area than chunks (), it is guaranteed that any overlapping H3 cells
-    # from the current chunk are contained within these neighbors.
-    # TODO: Dynamically determine which neighbors to process based on chunk/H3 boundaries.
+    # Process direct 8 neighbors of current chunk. Since H3 cells at resolution 13
+    # (43.870 m^2)have a smaller area than chunks (), it is guaranteed that any
+    # overlapping H3 cells from the current chunk are contained within these neighbors.
     neighbors = {
         (x - 1, y + 1),
         (x, y + 1),
@@ -357,6 +425,15 @@ def _aggregate_predictions(
         (x + 1, y - 1),
     }
     for neighbor_x, neighbor_y in neighbors:
+        if (
+            neighbor_x
+            < 0 | neighbor_y
+            < 0 | neighbor_x
+            >= study_area_metadata["col_count"] | neighbor_y
+            >= study_area_metadata["row_count"]
+        ):
+            # Chunk is outside the study area boundary.
+            continue
         query = (
             chunks_ref.where("x_index", "==", neighbor_x)
             .where("y_index", "==", neighbor_y)
@@ -364,8 +441,10 @@ def _aggregate_predictions(
         )
         chunk_doc = query.get()
         if not chunk_doc.exists:
-            # Some chunks may not have neighbors in the study area.
-            continue
+            return ValueError(
+                f"Neighbor chunk at index ({neighbor_x, neighbor_y}) \
+                  is missing from the study area."
+            )
 
         neighbor_chunk_metadata = chunk_doc.to_dict()
         if (
@@ -378,10 +457,12 @@ def _aggregate_predictions(
             or neighbor_chunk_metadata.get("y_index") is None
         ):
             raise ValueError(
-                f'Neighbor chunk "{neighbor_chunk_metadata["id"]}" is missing one or more required '
-                "fields: id, row_count, col_count, x_ll_corner, y_ll_corner, x_index, y_index"
+                f'Neighbor chunk "{neighbor_chunk_metadata["id"]}" is missing one or \
+                      more required fields: id, row_count, col_count, x_ll_corner, \
+                        y_ll_corner, x_index, y_index'
             )
 
+        # Determine if the neighbor chunk intersects with any of the boundary H3 cells.
         neighbor_chunk_boundary = _get_chunk_boundary(
             study_area_metadata, neighbor_chunk_metadata
         )
@@ -389,25 +470,31 @@ def _aggregate_predictions(
         for row in boundary_h3_cells.iterrows():
             if row["h3_boundary"].intersects(neighbor_chunk_boundary):
                 intersects = True
-                break  # Once an overlap is found, no need to check further
+                break
 
-        path = pathlib.PurePosixPath(object_name)
-        if len(path.parts) != 5:
-            raise ValueError("Invalid object name format. Expected 5 components.")
-        *prefix, old_chunk_id = path.parts  # Unpack all but the last component
-        new_path = pathlib.PurePosixPath(*prefix, neighbor_chunk_metadata.get("id"))
-        neighbor_chunk_predictions = _read_chunk_predictions(bucket_name, new_path)
-        neighbor_chunk_spatialized_predictions =_build_spatialized_model_predictions(study_area_metadata, neighbor_chunk_metadata, neighbor_chunk_predictions)
-        neighbor_chunk_spatialized_predictions[
-            ["h3_index", "h3_centroid_lat", "h3_centroid_lon", "h3_boundary"]
-        ] = neighbor_chunk_spatialized_predictions.apply(_add_h3_index_details, axis=1)
-        boundary_h3_set = set(boundary_h3_cells['h3_index'])
-
-        # 2. Filter the rows using a boolean mask
-        filtered_predictions = neighbor_chunk_spatialized_predictions[
-            neighbor_chunk_spatialized_predictions['h3_index'].isin(boundary_h3_set)
-        ]
-                
+        # Project cell centroids of neighbor chunk to H3 indexes and append any
+        # duplicate H3 indexes to input spatialized_predictions.
+        if intersects:
+            neighbor_chunk_predictions = _read_neighbor_chunk_predictions(
+                bucket_name, object_name, neighbor_chunk_metadata.get("id")
+            )
+            neighbor_chunk_spatialized_predictions = (
+                _build_spatialized_model_predictions(
+                    study_area_metadata,
+                    neighbor_chunk_metadata,
+                    neighbor_chunk_predictions,
+                )
+            )
+            neighbor_chunk_spatialized_predictions[
+                ["h3_index", "h3_centroid_lat", "h3_centroid_lon", "h3_boundary"]
+            ] = neighbor_chunk_spatialized_predictions.apply(
+                _add_h3_index_details, axis=1
+            )
+            spatialized_predictions = spatialized_predictions.join(
+                neighbor_chunk_spatialized_predictions.set_index("h3_index"),
+                on="h3_index",
+                how="left",
+            )
 
     spatialized_predictions = spatialized_predictions.groupby(
         ["h3_index"]
