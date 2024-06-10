@@ -10,6 +10,7 @@ from h3 import h3
 import pandas as pd
 import pathlib
 import numpy as np
+from google.cloud.firestore_v1.collection import CollectionReference
 
 GLOBAL_CRS = "EPSG:4326"
 # CAUTION: Changing the H3 cell size may require updates to how many/which neighboring
@@ -17,8 +18,6 @@ GLOBAL_CRS = "EPSG:4326"
 H3_LEVEL = 13
 STUDY_AREAS_ID = "study_areas"
 CHUNKS_ID = "chunks"
-
-chunks_ref = None
 
 
 # Triggered by the "object finalized" Cloud Storage event type.
@@ -50,7 +49,7 @@ def export_model_predictions(cloud_event: http.CloudEvent) -> None:
     prediction_type, model_id, study_area_name, scenario_id, chunk_id = path.parts
 
     predictions = _read_chunk_predictions(bucket_name, object_name)
-    study_area_metadata = _get_study_area_metadata(study_area_name)
+    study_area_metadata, chunks_ref = _get_study_area_metadata(study_area_name)
     chunk_metadata = _get_chunk_metadata(study_area_metadata, chunk_id)
 
     spatialized_predictions = _build_spatialized_model_predictions(
@@ -63,6 +62,7 @@ def export_model_predictions(cloud_event: http.CloudEvent) -> None:
         spatialized_predictions,
         bucket_name,
         object_name,
+        chunks_ref,
     )
 
     # Set the error message to the Series' json string for testing
@@ -132,14 +132,15 @@ def _read_neighbor_chunk_predictions(
     return _read_chunk_predictions(bucket_name, str(neighbor_object_name))
 
 
-def _get_study_area_metadata(study_area_name: str) -> dict:
+def _get_study_area_metadata(study_area_name: str) -> tuple[dict, CollectionReference]:
     """Retrieves metadata for a given study area from Firestore.
 
     Args:
         study_area_name: The name of the study area to retrieve metadata for.
 
     Returns:
-        A dictionary containing metadata for the study area.
+        A dictionary containing metadata for the study area and a reference to the
+        chunks collection in Firestore.
 
     Raises:
         ValueError: If the study area does not exist or its metadata is
@@ -149,7 +150,6 @@ def _get_study_area_metadata(study_area_name: str) -> dict:
     db = firestore.Client()
 
     study_area_ref = db.collection(STUDY_AREAS_ID).document(study_area_name)
-    global chunks_ref
     chunks_ref = study_area_ref.collection(CHUNKS_ID)
     study_area_doc = study_area_ref.get()
 
@@ -169,7 +169,7 @@ def _get_study_area_metadata(study_area_name: str) -> dict:
             "fields: cell_size, crs, chunks, row_count, col_count"
         )
 
-    return study_area_metadata
+    return study_area_metadata, chunks_ref
 
 
 def _get_chunk_metadata(study_area_metadata: dict, chunk_id: str) -> dict:
@@ -321,6 +321,7 @@ def _calculate_h3_indexes(
     spatialized_predictions: pd.DataFrame,
     bucket_name: str,
     object_name: str,
+    chunks_ref: CollectionReference,
 ) -> pd.Series:
     """Projects cell centroids to H3 indexes.
 
@@ -337,6 +338,8 @@ def _calculate_h3_indexes(
         bucket_name: The name of the GCS bucket containing model predictions.
         object_name: The name of the chunk object this cloud function is currently
         processing. Used to construct the GCS object name of the neighbor chunk.
+        chunks_ref: A reference to the chunks collection in Firestore, used to
+        retrieve metadata of the neighbor chunk.
 
     Returns:
         A Series containing H3 indexes in a single chunk along with associated
@@ -375,6 +378,7 @@ def _calculate_h3_indexes(
         spatialized_predictions,
         bucket_name,
         object_name,
+        chunks_ref,
     )
 
 
@@ -385,6 +389,7 @@ def _aggregate_h3_predictions(
     spatialized_predictions: pd.DataFrame,
     bucket_name: str,
     object_name: str,
+    chunks_ref: CollectionReference,
 ) -> pd.Series:
     """Aggregates predictions for duplicate H3 projections across chunk boundaries.
 
@@ -399,6 +404,8 @@ def _aggregate_h3_predictions(
         bucket_name: The name of the GCS bucket containing model predictions.
         object_name: The name of the chunk object this cloud function is currently
         processing. Used to construct the GCS object name of the neighbor chunk.
+        chunks_ref: A reference to the chunks collection in Firestore, used to
+        retrieve metadata of the neighbor chunk.
 
     Returns:
         A Series containing H3 indexes in a single chunk along with associated
@@ -428,8 +435,6 @@ def _aggregate_h3_predictions(
             or neighbor_y >= study_area_metadata["row_count"]
         ):
             # Chunk is outside the study area boundary.
-            continue
-        if chunks_ref is None:
             continue
         query = (
             chunks_ref.where("x_index", "==", neighbor_x)
