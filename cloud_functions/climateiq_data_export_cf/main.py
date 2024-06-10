@@ -196,7 +196,8 @@ def _get_chunk_metadata(study_area_metadata: dict, chunk_id: str) -> dict:
         raise ValueError(f'Chunk "{chunk_id}" does not exist')
 
     if (
-        "row_count" not in chunk_metadata
+        "id" not in chunk_metadata
+        or "row_count" not in chunk_metadata
         or "col_count" not in chunk_metadata
         or "x_ll_corner" not in chunk_metadata
         or "y_ll_corner" not in chunk_metadata
@@ -462,7 +463,7 @@ def _aggregate_h3_predictions(
         chunk_doc = query.get()
         if not chunk_doc.exists:
             raise ValueError(
-                f"Neighbor chunk at index {neighbor_x, neighbor_y} is missing from the"
+                f"Neighbor chunk at index {neighbor_x, neighbor_y} is missing from the "
                 "study area."
             )
 
@@ -477,7 +478,7 @@ def _aggregate_h3_predictions(
             or "y_index" not in neighbor_chunk_metadata
         ):
             raise ValueError(
-                f"Neighbor chunk at index {neighbor_x, neighbor_y} is missing one or"
+                f"Neighbor chunk at index {neighbor_x, neighbor_y} is missing one or "
                 "more required fields: id, row_count, col_count, x_ll_corner,"
                 "y_ll_corner, x_index, y_index"
             )

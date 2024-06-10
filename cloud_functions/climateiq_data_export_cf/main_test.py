@@ -358,7 +358,7 @@ def test_export_model_predictions_missing_expected_neighbor_chunk(
 
     # Neighbor chunks do not exist.
     mock_firestore_client().collection().document().collection().where().where(). \
-        limit().get().to_dict.exists = (
+        limit().get().exists = (
             False
     )
 
@@ -425,9 +425,8 @@ def test_export_model_predictions_invalid_neighbor_chunk(
 
     assert (
         "Neighbor chunk at index" in str(exc_info.value)
-        and "is missing one or more required fields: id, row_count, col_count,"
-        "x_ll_corner, y_ll_corner, x_index, y_index"
-    ) in str(exc_info.value)
+        and " is missing one or more required fields: id, row_count, col_count,"
+        " x_ll_corner,y_ll_corner, x_index, y_index" in str(exc_info.value))
 
 
 @mock.patch.object(storage, "Client", autospec=True)
@@ -606,6 +605,7 @@ def test_export_model_predictions_h3_centroids_outside_chunk(
         "col_count": 3,
         "chunks": {
             "chunk-id": {
+                "id": "chunk-id",
                 "row_count": 4,
                 "col_count": 6,
                 "x_ll_corner": 500,
