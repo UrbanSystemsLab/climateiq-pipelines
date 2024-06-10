@@ -1,5 +1,6 @@
 import json
 
+from typing import Any
 from cloudevents import http
 import functions_framework
 import geopandas as gpd
@@ -10,7 +11,6 @@ from h3 import h3
 import pandas as pd
 import pathlib
 import numpy as np
-from google.cloud.firestore_v1.collection import CollectionReference
 
 GLOBAL_CRS = "EPSG:4326"
 # CAUTION: Changing the H3 cell size may require updates to how many/which neighboring
@@ -132,7 +132,9 @@ def _read_neighbor_chunk_predictions(
     return _read_chunk_predictions(bucket_name, str(neighbor_object_name))
 
 
-def _get_study_area_metadata(study_area_name: str) -> tuple[dict, CollectionReference]:
+def _get_study_area_metadata(
+    study_area_name: str,
+) -> tuple[dict, Any]:
     """Retrieves metadata for a given study area from Firestore.
 
     Args:
@@ -321,7 +323,7 @@ def _calculate_h3_indexes(
     spatialized_predictions: pd.DataFrame,
     bucket_name: str,
     object_name: str,
-    chunks_ref: CollectionReference,
+    chunks_ref: Any,
 ) -> pd.Series:
     """Projects cell centroids to H3 indexes.
 
@@ -389,7 +391,7 @@ def _aggregate_h3_predictions(
     spatialized_predictions: pd.DataFrame,
     bucket_name: str,
     object_name: str,
-    chunks_ref: CollectionReference,
+    chunks_ref: Any,
 ) -> pd.Series:
     """Aggregates predictions for duplicate H3 projections across chunk boundaries.
 
