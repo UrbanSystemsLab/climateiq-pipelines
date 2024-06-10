@@ -361,14 +361,12 @@ def _calculate_h3_indexes(
 
     # Extract rows where the projected H3 cell is not fully contained within the chunk
     # so we can aggregate prediction values across chunk boundaries.
-    boundary_h3_cells = set(
-        spatialized_predictions[
-            spatialized_predictions.apply(
-                lambda row: not row["h3_boundary"].within(chunk_boundary),
-                axis=1,
-            )
-        ]["h3_boundary"]
-    )
+    boundary_h3_cells = spatialized_predictions[
+        spatialized_predictions.apply(
+            lambda row: not row["h3_boundary"].within(chunk_boundary),
+            axis=1,
+        )
+    ]["h3_boundary"].unique()
 
     return _aggregate_h3_predictions(
         study_area_metadata,
@@ -383,7 +381,7 @@ def _calculate_h3_indexes(
 def _aggregate_h3_predictions(
     study_area_metadata: dict,
     chunk_metadata: dict,
-    boundary_h3_cells: pd.DataFrame,
+    boundary_h3_cells: np.ndarray,
     spatialized_predictions: pd.DataFrame,
     bucket_name: str,
     object_name: str,
@@ -394,7 +392,7 @@ def _aggregate_h3_predictions(
         study_area_metadata: A dictionary containing metadata for the study
         area.
         chunk_metadata: A dictionary containing metadata for the chunk.
-        boundary_h3_cells: A set containing the H3 boundaries of cells that
+        boundary_h3_cells: An array containing the H3 boundaries of cells that
         intersect with the chunk boundary.
         spatialized_predictions: A DataFrame containing H3 indexes and predictions
         for a single chunk. This input DataFrame may contain duplicate H3 indexes.
@@ -424,11 +422,10 @@ def _aggregate_h3_predictions(
     }
     for neighbor_x, neighbor_y in neighbors:
         if (
-            neighbor_x
-            < 0 | neighbor_y
-            < 0 | neighbor_x
-            >= study_area_metadata["col_count"] | neighbor_y
-            >= study_area_metadata["row_count"]
+            neighbor_x < 0
+            or neighbor_y < 0
+            or neighbor_x >= study_area_metadata["col_count"]
+            or neighbor_y >= study_area_metadata["row_count"]
         ):
             # Chunk is outside the study area boundary.
             continue
