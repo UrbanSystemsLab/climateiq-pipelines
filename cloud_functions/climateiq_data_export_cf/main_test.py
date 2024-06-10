@@ -86,6 +86,7 @@ def test_export_model_predictions_invalid_study_area(
         "col_count": 3,
         "chunks": {
             "chunk-id": {
+                "id": "chunk-id",
                 "row_count": 2,
                 "col_count": 3,
                 "x_ll_corner": 500,
@@ -137,6 +138,7 @@ def test_export_model_predictions_missing_chunk(
         "col_count": 3,
         "chunks": {
             "missing-chunk-id": {
+                "id": "missing-chunk-id",
                 "row_count": 2,
                 "col_count": 3,
                 "x_ll_corner": 500,
@@ -185,6 +187,7 @@ def test_export_model_predictions_invalid_chunk(
         "col_count": 3,
         "chunks": {
             "chunk-id": {
+                "id": "chunk-id",
                 "col_count": 3,
                 "x_ll_corner": 500,
                 "y_ll_corner": 100,
@@ -235,6 +238,7 @@ def test_export_model_predictions_missing_predictions(
         "col_count": 3,
         "chunks": {
             "chunk-id": {
+                "id": "chunk-id",
                 "row_count": 2,
                 "col_count": 3,
                 "x_ll_corner": 500,
@@ -251,7 +255,10 @@ def test_export_model_predictions_missing_predictions(
     with pytest.raises(ValueError) as exc_info:
         main.export_model_predictions(event)
 
-    assert "Predictions file is missing predictions." in str(exc_info.value)
+    assert (
+        "Predictions file: prediction-type/model-id/study-area-name/scenario-id/"
+        "chunk-id is missing." in str(exc_info.value)
+    )
 
 
 @mock.patch.object(storage, "Client", autospec=True)
@@ -286,6 +293,7 @@ def test_export_model_predictions_too_many_predictions(
         "col_count": 3,
         "chunks": {
             "chunk-id": {
+                "id": "chunk-id",
                 "row_count": 2,
                 "col_count": 3,
                 "x_ll_corner": 500,
@@ -307,7 +315,7 @@ def test_export_model_predictions_too_many_predictions(
 
 @mock.patch.object(storage, "Client", autospec=True)
 @mock.patch.object(firestore, "Client", autospec=True)
-def test_export_model_predictions_h3_centroids_within_chunk(
+def test_export_model_predictions_missing_expected_neighbor_chunk(
     mock_firestore_client, mock_storage_client
 ) -> None:
     attributes = {
@@ -334,12 +342,13 @@ def test_export_model_predictions_h3_centroids_within_chunk(
         "col_count": 3,
         "chunks": {
             "chunk-id": {
+                "id": "chunk-id",
                 "row_count": 2,
                 "col_count": 3,
                 "x_ll_corner": 500,
                 "y_ll_corner": 100,
-                "x_index": 0,
-                "y_index": 0,
+                "x_index": 1,
+                "y_index": 1,
             }
         },
     }
@@ -347,14 +356,204 @@ def test_export_model_predictions_h3_centroids_within_chunk(
         metadata
     )
 
+    # Neighbor chunks do not exist.
+    mock_firestore_client().collection().document().collection().where().where(). \
+        limit().get().to_dict.exists = (
+            False
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        main.export_model_predictions(event)
+
+    assert "Neighbor chunk at index" in str(
+        exc_info.value
+    ) and "is missing from the study area" in str(exc_info.value)
+
+
+@mock.patch.object(storage, "Client", autospec=True)
+@mock.patch.object(firestore, "Client", autospec=True)
+def test_export_model_predictions_invalid_neighbor_chunk(
+    mock_firestore_client, mock_storage_client
+) -> None:
+    attributes = {
+        "type": "google.cloud.storage.object.v1.finalized",
+        "source": "source",
+    }
+    data = {
+        "bucket": "climateiq-predictions",
+        "name": "prediction-type/model-id/study-area-name/scenario-id/chunk-id",
+    }
+    event = http.CloudEvent(attributes, data)
+
+    # Build mock Storage object
+    predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}\n'
+    with mock_storage_client().bucket("").blob("").open() as mock_fd:
+        mock_fd.__iter__.return_value = iter(predictions.splitlines())
+
+    # Build mock Firestore document
+    metadata = {
+        "name": "study_area_name",
+        "cell_size": 10,
+        "crs": "EPSG:32618",
+        "row_count": 2,
+        "col_count": 3,
+        "chunks": {
+            "chunk-id": {
+                "id": "chunk-id",
+                "row_count": 3,
+                "col_count": 2,
+                "x_ll_corner": 500,
+                "y_ll_corner": 100,
+                "x_index": 1,
+                "y_index": 1,
+            }
+        },
+    }
+    mock_firestore_client().collection().document().get().to_dict.return_value = (
+        metadata
+    )
+
+    neighbor_metadata = metadata["chunks"]["chunk-id"].copy()
+    neighbor_metadata.pop("row_count")
+    mock_firestore_client().collection().document().collection().where().where(). \
+        limit().get().to_dict.return_value = (
+            neighbor_metadata
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        main.export_model_predictions(event)
+
+    assert (
+        "Neighbor chunk at index" in str(exc_info.value)
+        and "is missing one or more required fields: id, row_count, col_count,"
+        "x_ll_corner, y_ll_corner, x_index, y_index"
+    ) in str(exc_info.value)
+
+
+@mock.patch.object(storage, "Client", autospec=True)
+@mock.patch.object(firestore, "Client", autospec=True)
+def test_export_model_predictions_neighbor_chunk_missing_predictions(
+    mock_firestore_client, mock_storage_client
+) -> None:
+    attributes = {
+        "type": "google.cloud.storage.object.v1.finalized",
+        "source": "source",
+    }
+    data = {
+        "bucket": "climateiq-predictions",
+        "name": "prediction-type/model-id/study-area-name/scenario-id/chunk-id",
+    }
+    event = http.CloudEvent(attributes, data)
+
+    # Build mock Storage object
+    predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}\n'
+    with mock_storage_client().bucket("").blob("").open() as mock_fd:
+        mock_fd.__iter__.return_value = iter(predictions.splitlines())
+
+    # Build mock Firestore document
+    metadata = {
+        "name": "study_area_name",
+        "cell_size": 10,
+        "crs": "EPSG:32618",
+        "row_count": 2,
+        "col_count": 3,
+        "chunks": {
+            "chunk-id": {
+                "id": "chunk-id",
+                "row_count": 3,
+                "col_count": 2,
+                "x_ll_corner": 500,
+                "y_ll_corner": 100,
+                "x_index": 1,
+                "y_index": 1,
+            }
+        },
+    }
+    mock_firestore_client().collection().document().get().to_dict.return_value = (
+        metadata
+    )
+
+    neighbor_metadata = metadata["chunks"]["chunk-id"].copy()
+    neighbor_metadata["id"] = "neighbor-chunk-id"
+    mock_firestore_client().collection().document().collection().where().where(). \
+        limit().get().to_dict.return_value = (
+            neighbor_metadata
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        main.export_model_predictions(event)
+
+    assert (
+        "Predictions file: prediction-type/model-id/study-area-name/scenario-id/"
+        "neighbor-chunk-id is missing."
+    ) in str(exc_info.value)
+
+
+@mock.patch.object(storage, "Client", autospec=True)
+@mock.patch.object(firestore, "Client", autospec=True)
+def test_export_model_predictions_h3_centroids_within_chunk(
+    mock_firestore_client, mock_storage_client
+) -> None:
+    attributes = {
+        "type": "google.cloud.storage.object.v1.finalized",
+        "source": "source",
+    }
+    data = {
+        "bucket": "climateiq-predictions",
+        "name": "prediction-type/model-id/study-area-name/scenario-id/chunk-id",
+    }
+    event = http.CloudEvent(attributes, data)
+
+    # Build mock Storage object
+    predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}\n'
+    with mock_storage_client().bucket("").blob("").open() as mock_fd:
+        mock_fd.__iter__.side_effect = [
+            iter(predictions.splitlines()),
+            iter(predictions.splitlines()),
+            iter(predictions.splitlines()),
+            iter(predictions.splitlines()),
+            iter(predictions.splitlines()),
+            iter(predictions.splitlines()),
+        ]
+
+    # Build mock Firestore document
+    metadata = {
+        "name": "study_area_name",
+        "cell_size": 10,
+        "crs": "EPSG:32618",
+        "row_count": 2,
+        "col_count": 3,
+        "chunks": {
+            "chunk-id": {
+                "id": "chunk-id",
+                "row_count": 2,
+                "col_count": 3,
+                "x_ll_corner": 500,
+                "y_ll_corner": 100,
+                "x_index": 1,
+                "y_index": 1,
+            }
+        },
+    }
+    mock_firestore_client().collection().document().get().to_dict.return_value = (
+        metadata
+    )
+
+    neighbor_metadata = metadata["chunks"]["chunk-id"].copy()
+    neighbor_metadata["id"] = "neighbor-chunk-id"
+    mock_firestore_client().collection().document().collection().where().where(). \
+        limit().get().to_dict.return_value = (
+            neighbor_metadata
+    )
+
     # Build expected output data
     expected_series = pd.Series(
         {
-            "8d8f2c80c1582bf": 3.0,
-            "8d8f2c80c1586bf": 1.0,
+            "8d8f2c80c1582bf": 3.0,  # Boundary H3 cell (top, right, upper right)
+            "8d8f2c80c1586bf": 1.0,  # Boundary H3 cell (top)
             "8d8f2c80c1586ff": 2.0,
-            "8d8f2c80c15b83f": 6.0,
-            "8d8f2c80c15bc3f": 4.0,
+            "8d8f2c80c15b83f": 6.0,  # Boundary H3 cell (bottom, right)
+            "8d8f2c80c15bc3f": 4.0,  # Boundary H3 cell (bottom)
             "8d8f2c80c15bd7f": 5.0,
         }
     )
@@ -389,7 +588,14 @@ def test_export_model_predictions_h3_centroids_outside_chunk(
     [7, 8, 9, 10, 11, 12], [13, 14, 15, 16, 17, 18], \
     [19, 20, 21, 22, 23, 24]]}\n'
     with mock_storage_client().bucket("").blob("").open() as mock_fd:
-        mock_fd.__iter__.return_value = iter(predictions.splitlines())
+        mock_fd.__iter__.side_effect = [
+            iter(predictions.splitlines()),
+            iter(predictions.splitlines()),
+            iter(predictions.splitlines()),
+            iter(predictions.splitlines()),
+            iter(predictions.splitlines()),
+            iter(predictions.splitlines()),
+        ]
 
     # Build mock Firestore document
     metadata = {
@@ -404,13 +610,20 @@ def test_export_model_predictions_h3_centroids_outside_chunk(
                 "col_count": 6,
                 "x_ll_corner": 500,
                 "y_ll_corner": 100,
-                "x_index": 0,
-                "y_index": 0,
+                "x_index": 1,
+                "y_index": 1,
             }
         },
     }
     mock_firestore_client().collection().document().get().to_dict.return_value = (
         metadata
+    )
+
+    neighbor_metadata = metadata["chunks"]["chunk-id"].copy()
+    neighbor_metadata["id"] = "neighbor-chunk-id"
+    mock_firestore_client().collection().document().collection().where().where(). \
+        limit().get().to_dict.return_value = (
+            neighbor_metadata
     )
 
     # Build expected output data

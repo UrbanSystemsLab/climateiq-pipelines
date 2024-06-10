@@ -32,8 +32,8 @@ def export_model_predictions(cloud_event: http.CloudEvent) -> None:
         "<prediction_type>/<model_id>/<study_area_name>/<scenario_id>/<chunk_id>"
 
     Raises:
-        ValueError: If the object name format, study area metadata, chunk
-        area metadata or predictions file format is invalid.
+        ValueError: If the object name format, study area metadata, chunk / neighbor
+        chunk metadata or predictions file format is invalid.
         NotImplementedError: The result which should be stored elsewhere. This is:
             a Series of h3 indices to the aggregated prediction.
     """
@@ -96,7 +96,7 @@ def _read_chunk_predictions(bucket_name: str, object_name: str) -> np.ndarray:
         # Vertex AI will output one predictions file per chunk so the file is
         # expected to contain only one prediction.
         if line is None:
-            raise ValueError("Predictions file is missing predictions.")
+            raise ValueError(f"Predictions file: {object_name} is missing.")
 
         prediction = json.loads(line)["prediction"]
 
@@ -160,11 +160,11 @@ def _get_study_area_metadata(
 
     study_area_metadata = study_area_doc.to_dict()
     if (
-        study_area_metadata.get("cell_size") is None
-        or study_area_metadata.get("crs") is None
-        or study_area_metadata.get("chunks") is None
-        or study_area_metadata.get("row_count") is None
-        or study_area_metadata.get("col_count") is None
+        "cell_size" not in study_area_metadata
+        or "crs" not in study_area_metadata
+        or "chunks" not in study_area_metadata
+        or "row_count" not in study_area_metadata
+        or "col_count" not in study_area_metadata
     ):
         raise ValueError(
             f'Study area "{study_area_name}" is missing one or more required '
@@ -196,12 +196,12 @@ def _get_chunk_metadata(study_area_metadata: dict, chunk_id: str) -> dict:
         raise ValueError(f'Chunk "{chunk_id}" does not exist')
 
     if (
-        chunk_metadata.get("row_count") is None
-        or chunk_metadata.get("col_count") is None
-        or chunk_metadata.get("x_ll_corner") is None
-        or chunk_metadata.get("y_ll_corner") is None
-        or chunk_metadata.get("x_index") is None
-        or chunk_metadata.get("y_index") is None
+        "row_count" not in chunk_metadata
+        or "col_count" not in chunk_metadata
+        or "x_ll_corner" not in chunk_metadata
+        or "y_ll_corner" not in chunk_metadata
+        or "x_index" not in chunk_metadata
+        or "y_index" not in chunk_metadata
     ):
         raise ValueError(
             f'Chunk "{chunk_id}" is missing one or more required fields: '
@@ -346,6 +346,10 @@ def _calculate_h3_indexes(
     Returns:
         A Series containing H3 indexes in a single chunk along with associated
         predictions, representing a subset of the full study area results.
+
+    Raises:
+        ValueError: If an expected neighbor chunk does not exist or its metadata is
+        missing required fields.
     """
     # Calculate H3 information for each cell.
     spatialized_predictions[
@@ -412,12 +416,24 @@ def _aggregate_h3_predictions(
     Returns:
         A Series containing H3 indexes in a single chunk along with associated
         predictions, representing a subset of the full study area results.
+
+    Raises:
+        ValueError: If an expected neighbor chunk does not exist or its metadata is
+        missing required fields.
     """
+    # No need to read neighbors if current chunk had no H3 cells that overlap with
+    # neighbor chunk boundaries.
+    if boundary_h3_cells.size == 0:
+        spatialized_predictions = spatialized_predictions.groupby(
+            ["h3_index"]
+        ).prediction.agg("mean")
+        return spatialized_predictions
+
     x = chunk_metadata["x_index"]
     y = chunk_metadata["y_index"]
 
     # Process direct 8 neighbors of current chunk. Since H3 cells at resolution 13
-    # (43.870 m^2)have a smaller area than chunks (), it is guaranteed that any
+    # (43.870 m^2) have a smaller area than chunks (2000 m^2), it is guaranteed that any
     # overlapping H3 cells from the current chunk are contained within these neighbors.
     neighbors = {
         (x - 1, y + 1),
@@ -445,25 +461,25 @@ def _aggregate_h3_predictions(
         )
         chunk_doc = query.get()
         if not chunk_doc.exists:
-            return ValueError(
-                f"Neighbor chunk at index ({neighbor_x, neighbor_y}) \
-                  is missing from the study area."
+            raise ValueError(
+                f"Neighbor chunk at index {neighbor_x, neighbor_y} is missing from the"
+                "study area."
             )
 
         neighbor_chunk_metadata = chunk_doc.to_dict()
         if (
-            neighbor_chunk_metadata.get("id") is None
-            or neighbor_chunk_metadata.get("row_count") is None
-            or neighbor_chunk_metadata.get("col_count") is None
-            or neighbor_chunk_metadata.get("x_ll_corner") is None
-            or neighbor_chunk_metadata.get("y_ll_corner") is None
-            or neighbor_chunk_metadata.get("x_index") is None
-            or neighbor_chunk_metadata.get("y_index") is None
+            "id" not in neighbor_chunk_metadata
+            or "row_count" not in neighbor_chunk_metadata
+            or "col_count" not in neighbor_chunk_metadata
+            or "x_ll_corner" not in neighbor_chunk_metadata
+            or "y_ll_corner" not in neighbor_chunk_metadata
+            or "x_index" not in neighbor_chunk_metadata
+            or "y_index" not in neighbor_chunk_metadata
         ):
             raise ValueError(
-                f'Neighbor chunk "{neighbor_chunk_metadata["id"]}" is missing one or \
-                      more required fields: id, row_count, col_count, x_ll_corner, \
-                        y_ll_corner, x_index, y_index'
+                f"Neighbor chunk at index {neighbor_x, neighbor_y} is missing one or"
+                "more required fields: id, row_count, col_count, x_ll_corner,"
+                "y_ll_corner, x_index, y_index"
             )
 
         # Determine if the neighbor chunk intersects with any of the boundary H3 cells.
@@ -494,10 +510,15 @@ def _aggregate_h3_predictions(
             ] = neighbor_chunk_spatialized_predictions.apply(
                 _add_h3_index_details, axis=1
             )
-            spatialized_predictions = spatialized_predictions.join(
-                neighbor_chunk_spatialized_predictions.set_index("h3_index"),
-                on="h3_index",
-                how="left",
+            neighbor_chunk_spatialized_predictions = (
+                neighbor_chunk_spatialized_predictions[
+                    neighbor_chunk_spatialized_predictions["h3_index"].isin(
+                        spatialized_predictions["h3_index"]
+                    )
+                ]
+            )
+            spatialized_predictions = pd.concat(
+                [spatialized_predictions, neighbor_chunk_spatialized_predictions]
             )
 
     spatialized_predictions = spatialized_predictions.groupby(
