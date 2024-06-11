@@ -174,6 +174,25 @@ def _get_study_area_metadata(
     return study_area_metadata, chunks_ref
 
 
+def _chunk_metadata_fields_valid(chunk_metadata: dict) -> bool:
+    """Checks whether all required fields are present in chunk_metadata.
+
+    Args:
+        chunk_metadata: A dictionary containing metadata for the chunk.
+
+    Returns:
+        A bool indicating whether all required fields exist.
+    """
+    return (
+        "row_count" in chunk_metadata
+        and "col_count" in chunk_metadata
+        and "x_ll_corner" in chunk_metadata
+        and "y_ll_corner" in chunk_metadata
+        and "x_index" in chunk_metadata
+        and "y_index" in chunk_metadata
+    )
+
+
 def _get_chunk_metadata(study_area_metadata: dict, chunk_id: str) -> dict:
     """Retrieves metadata for a specific chunk within a study area.
 
@@ -195,15 +214,7 @@ def _get_chunk_metadata(study_area_metadata: dict, chunk_id: str) -> dict:
     if chunk_metadata is None:
         raise ValueError(f'Chunk "{chunk_id}" does not exist')
 
-    if (
-        "id" not in chunk_metadata
-        or "row_count" not in chunk_metadata
-        or "col_count" not in chunk_metadata
-        or "x_ll_corner" not in chunk_metadata
-        or "y_ll_corner" not in chunk_metadata
-        or "x_index" not in chunk_metadata
-        or "y_index" not in chunk_metadata
-    ):
+    if not _chunk_metadata_fields_valid(chunk_metadata):
         raise ValueError(
             f'Chunk "{chunk_id}" is missing one or more required fields: '
             "row_count, col_count, x_ll_corner, y_ll_corner, x_index, y_index"
@@ -467,16 +478,9 @@ def _aggregate_h3_predictions(
                 "study area."
             )
 
+        neighbor_chunk_id = chunk_doc.id
         neighbor_chunk_metadata = chunk_doc.to_dict()
-        if (
-            "id" not in neighbor_chunk_metadata
-            or "row_count" not in neighbor_chunk_metadata
-            or "col_count" not in neighbor_chunk_metadata
-            or "x_ll_corner" not in neighbor_chunk_metadata
-            or "y_ll_corner" not in neighbor_chunk_metadata
-            or "x_index" not in neighbor_chunk_metadata
-            or "y_index" not in neighbor_chunk_metadata
-        ):
+        if not _chunk_metadata_fields_valid(neighbor_chunk_metadata):
             raise ValueError(
                 f"Neighbor chunk at index {neighbor_x, neighbor_y} is missing one or "
                 "more required fields: id, row_count, col_count, x_ll_corner,"
@@ -497,7 +501,7 @@ def _aggregate_h3_predictions(
         # duplicate H3 indexes to input spatialized_predictions.
         if intersects:
             neighbor_chunk_predictions = _read_neighbor_chunk_predictions(
-                bucket_name, object_name, neighbor_chunk_metadata.get("id")
+                bucket_name, object_name, neighbor_chunk_id
             )
             neighbor_chunk_spatialized_predictions = (
                 _build_spatialized_model_predictions(
@@ -506,6 +510,8 @@ def _aggregate_h3_predictions(
                     neighbor_chunk_predictions,
                 )
             )
+            # TODO: Optionally only calculate the h3_index if calculating other
+            # metadata is expensive
             neighbor_chunk_spatialized_predictions[
                 ["h3_index", "h3_centroid_lat", "h3_centroid_lon", "h3_boundary"]
             ] = neighbor_chunk_spatialized_predictions.apply(
@@ -518,6 +524,7 @@ def _aggregate_h3_predictions(
                     )
                 ]
             )
+
             spatialized_predictions = pd.concat(
                 [spatialized_predictions, neighbor_chunk_spatialized_predictions]
             )

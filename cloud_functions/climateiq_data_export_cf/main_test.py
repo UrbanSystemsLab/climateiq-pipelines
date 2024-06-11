@@ -86,7 +86,6 @@ def test_export_model_predictions_invalid_study_area(
         "col_count": 3,
         "chunks": {
             "chunk-id": {
-                "id": "chunk-id",
                 "row_count": 2,
                 "col_count": 3,
                 "x_ll_corner": 500,
@@ -138,7 +137,6 @@ def test_export_model_predictions_missing_chunk(
         "col_count": 3,
         "chunks": {
             "missing-chunk-id": {
-                "id": "missing-chunk-id",
                 "row_count": 2,
                 "col_count": 3,
                 "x_ll_corner": 500,
@@ -187,7 +185,6 @@ def test_export_model_predictions_invalid_chunk(
         "col_count": 3,
         "chunks": {
             "chunk-id": {
-                "id": "chunk-id",
                 "col_count": 3,
                 "x_ll_corner": 500,
                 "y_ll_corner": 100,
@@ -238,7 +235,6 @@ def test_export_model_predictions_missing_predictions(
         "col_count": 3,
         "chunks": {
             "chunk-id": {
-                "id": "chunk-id",
                 "row_count": 2,
                 "col_count": 3,
                 "x_ll_corner": 500,
@@ -293,7 +289,6 @@ def test_export_model_predictions_too_many_predictions(
         "col_count": 3,
         "chunks": {
             "chunk-id": {
-                "id": "chunk-id",
                 "row_count": 2,
                 "col_count": 3,
                 "x_ll_corner": 500,
@@ -342,7 +337,6 @@ def test_export_model_predictions_missing_expected_neighbor_chunk(
         "col_count": 3,
         "chunks": {
             "chunk-id": {
-                "id": "chunk-id",
                 "row_count": 2,
                 "col_count": 3,
                 "x_ll_corner": 500,
@@ -364,9 +358,9 @@ def test_export_model_predictions_missing_expected_neighbor_chunk(
     with pytest.raises(ValueError) as exc_info:
         main.export_model_predictions(event)
 
-    assert "Neighbor chunk at index" in str(
+    assert "Neighbor chunk at index (0, 1) is missing from the study area" in str(
         exc_info.value
-    ) and "is missing from the study area" in str(exc_info.value)
+    )
 
 
 @mock.patch.object(storage, "Client", autospec=True)
@@ -398,7 +392,6 @@ def test_export_model_predictions_invalid_neighbor_chunk(
         "col_count": 3,
         "chunks": {
             "chunk-id": {
-                "id": "chunk-id",
                 "row_count": 3,
                 "col_count": 2,
                 "x_ll_corner": 500,
@@ -414,7 +407,9 @@ def test_export_model_predictions_invalid_neighbor_chunk(
 
     # Build neighbor chunk data.
     neighbor_metadata = metadata["chunks"]["chunk-id"].copy()
-    neighbor_metadata["id"] = "neighbor-chunk-id"
+    mock_firestore_client().collection().document().collection().where().where().limit().get().id = (
+        "neighbor-chunk-id"
+    )
     neighbor_metadata.pop("row_count")  # Missing "row_count" required field
     mock_firestore_client().collection().document().collection().where().where().limit().get().to_dict.return_value = (
         neighbor_metadata
@@ -423,10 +418,10 @@ def test_export_model_predictions_invalid_neighbor_chunk(
     with pytest.raises(ValueError) as exc_info:
         main.export_model_predictions(event)
 
-    assert "Neighbor chunk at index" in str(
-        exc_info.value
-    ) and " is missing one or more required fields: id, row_count, col_count," " x_ll_corner,y_ll_corner, x_index, y_index" in str(
-        exc_info.value
+    assert (
+        "Neighbor chunk at index (0, 1) is missing one or more required fields: id,"
+        " row_count, col_count, x_ll_corner,y_ll_corner, x_index, y_index"
+        in str(exc_info.value)
     )
 
 
@@ -461,7 +456,6 @@ def test_export_model_predictions_neighbor_chunk_missing_predictions(
         "col_count": 3,
         "chunks": {
             "chunk-id": {
-                "id": "chunk-id",
                 "row_count": 3,
                 "col_count": 2,
                 "x_ll_corner": 500,
@@ -477,7 +471,9 @@ def test_export_model_predictions_neighbor_chunk_missing_predictions(
 
     # Build neighbor chunk data.
     neighbor_metadata = metadata["chunks"]["chunk-id"].copy()
-    neighbor_metadata["id"] = "neighbor-chunk-id"
+    mock_firestore_client().collection().document().collection().where().where().limit().get().id = (
+        "neighbor-chunk-id"
+    )
     mock_firestore_client().collection().document().collection().where().where().limit().get().to_dict.return_value = (
         neighbor_metadata
     )
@@ -527,7 +523,6 @@ def test_export_model_predictions_h3_centroids_within_chunk(
         "col_count": 3,
         "chunks": {
             "chunk-id": {
-                "id": "chunk-id",
                 "row_count": 2,
                 "col_count": 3,
                 "x_ll_corner": 500,
@@ -543,12 +538,15 @@ def test_export_model_predictions_h3_centroids_within_chunk(
 
     # Build neighbor chunk data.
     neighbor_metadata = metadata["chunks"]["chunk-id"].copy()
-    neighbor_metadata["id"] = "neighbor-chunk-id"
+    mock_firestore_client().collection().document().collection().where().where().limit().get().id = (
+        "neighbor-chunk-id"
+    )
     mock_firestore_client().collection().document().collection().where().where().limit().get().to_dict.return_value = (
         neighbor_metadata
     )
 
-    # Build expected output data (neighbor chunks have same data as current chunk in this test so prediction values stay the same after aggregation.)
+    # Build expected output data (neighbor chunks have same data as current chunk in
+    # this test so prediction values stay the same after aggregation.)
     expected_series = pd.Series(
         {
             "8d8f2c80c1582bf": 3.0,
@@ -609,7 +607,6 @@ def test_export_model_predictions_h3_centroids_outside_chunk(
         "col_count": 3,
         "chunks": {
             "chunk-id": {
-                "id": "chunk-id",
                 "row_count": 4,
                 "col_count": 6,
                 "x_ll_corner": 500,
@@ -625,25 +622,34 @@ def test_export_model_predictions_h3_centroids_outside_chunk(
 
     # Build neighbor chunk data.
     neighbor_metadata = metadata["chunks"]["chunk-id"].copy()
-    neighbor_metadata["id"] = "neighbor-chunk-id"
+    mock_firestore_client().collection().document().collection().where().where().limit().get().id = (
+        "neighbor-chunk-id"
+    )
     mock_firestore_client().collection().document().collection().where().where().limit().get().to_dict.return_value = (
         neighbor_metadata
     )
 
-    # Build expected output data (neighbor chunks have same data as current chunk in this test so prediction values stay the same after aggregation.)
+    # Build expected output data (neighbor chunks have same data as current chunk in
+    # this test so prediction values stay the same after aggregation.)
     expected_series = pd.Series(
         {
             "8d8f2c80c1582bf": 6.0,
             "8d8f2c80c15863f": 3.0,
-            "8d8f2c80c15867f": 7.5,  
+            "8d8f2c80c15867f": 7.5,
             "8d8f2c80c1586bf": 2.0,
             "8d8f2c80c1586ff": 9.0,
-            "8d8f2c80c15b83f": 23.5,  # Average of prediction values 23, 24 (from current chunk)
-            "8d8f2c80c15b93f": 15.0,  # Average of prediction values 12, 18 (from current chunk)
-            "8d8f2c80c15b9bf": 16.5,  # Average of prediction values 16, 17 (from current chunk)
-            "8d8f2c80c15bc3f": 19.5,  # Average of prediction values 19, 20 (from current chunk)
-            "8d8f2c80c15bd3f": 11.0,  # Average of prediction values 8, 14 (from current chunk)
-            "8d8f2c80c15bd7f": 18.0,  # Average of prediction values 15, 21 (from current chunk)
+            "8d8f2c80c15b83f": 23.5,  # Average of prediction values
+            # 23, 24 (from current chunk)
+            "8d8f2c80c15b93f": 15.0,  # Average of prediction values
+            # 12, 18 (from current chunk)
+            "8d8f2c80c15b9bf": 16.5,  # Average of prediction values
+            # 16, 17 (from current chunk)
+            "8d8f2c80c15bc3f": 19.5,  # Average of prediction values
+            # 19, 20 (from current chunk)
+            "8d8f2c80c15bd3f": 11.0,  # Average of prediction values
+            # 8, 14 (from current chunk)
+            "8d8f2c80c15bd7f": 18.0,  # Average of prediction values
+            # 15, 21 (from current chunk)
         }
     )
 
@@ -673,8 +679,16 @@ def test_export_model_predictions_overlapping_neighbors(
     event = http.CloudEvent(attributes, data)
 
     # Build mock Storage object
-    predictions = '{"instance": [1], "prediction": [[1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, 12], [13, 14, 15, 16, 17, 18], [19, 20, 21, 22, 23, 24], [25, 26, 27, 28, 29, 30]]}\n'
-    predictions_bottom = '{"instance": [1], "prediction": [[31, 32, 33, 34, 35, 36], [37, 38, 39, 40, 41, 42], [43, 44, 45, 46, 47, 48], [49, 50, 51, 52, 53, 54], [55, 56, 57, 58, 59, 60]]}\n'
+    predictions = (
+        '{"instance": [1], "prediction": [[1, 2, 3, 4, 5, 6],'
+        "[7, 8, 9, 10, 11, 12], [13, 14, 15, 16, 17, 18], [19, 20, 21, 22, 23, 24],"
+        "[25, 26, 27, 28, 29, 30]]}\n"
+    )
+    predictions_bottom = (
+        '{"instance": [1], "prediction": [[31, 32, 33, 34, 35, 36],'
+        "[37, 38, 39, 40, 41, 42], [43, 44, 45, 46, 47, 48], [49, 50, 51, 52, 53, 54],"
+        "[55, 56, 57, 58, 59, 60]]}\n"
+    )
 
     with mock_storage_client().bucket("").blob("").open() as mock_fd:
         mock_fd.__iter__.side_effect = [
@@ -691,7 +705,6 @@ def test_export_model_predictions_overlapping_neighbors(
         "col_count": 3,
         "chunks": {
             "chunk-id": {
-                "id": "chunk-id",
                 "row_count": 5,
                 "col_count": 6,
                 "x_ll_corner": 500,
@@ -707,7 +720,6 @@ def test_export_model_predictions_overlapping_neighbors(
 
     # Build neighbor chunk data.
     neighbor_left = {
-        "id": "neighbor-chunk-left",
         "row_count": 5,
         "col_count": 6,
         "x_ll_corner": 482,
@@ -716,7 +728,6 @@ def test_export_model_predictions_overlapping_neighbors(
         "y_index": 1,
     }
     neighbor_right = {
-        "id": "neighbor-chunk-right",
         "row_count": 5,
         "col_count": 6,
         "x_ll_corner": 518,
@@ -725,7 +736,6 @@ def test_export_model_predictions_overlapping_neighbors(
         "y_index": 1,
     }
     neighbor_bottom_left = {
-        "id": "neighbor-chunk-bottom-left",
         "row_count": 5,
         "col_count": 6,
         "x_ll_corner": 482,
@@ -734,7 +744,6 @@ def test_export_model_predictions_overlapping_neighbors(
         "y_index": 0,
     }
     neighbor_bottom_right = {
-        "id": "neighbor-chunk-bottom-right",
         "row_count": 5,
         "col_count": 6,
         "x_ll_corner": 518,
@@ -743,7 +752,6 @@ def test_export_model_predictions_overlapping_neighbors(
         "y_index": 0,
     }
     neighbor_bottom = {
-        "id": "neighbor-chunk-bottom",
         "row_count": 5,
         "col_count": 6,
         "x_ll_corner": 500,
@@ -751,6 +759,13 @@ def test_export_model_predictions_overlapping_neighbors(
         "x_index": 1,
         "y_index": 0,
     }
+    mock_firestore_client().collection().document().collection().where().where().limit().get().id.side_effect = [
+        "neighbor-chunk-left",
+        "neighbor-chunk-right",
+        "neighbor-chunk-bottom-left",
+        "neighbor-chunk-bottom-right",
+        "neighbor-chunk-bottom",
+    ]
     mock_firestore_client().collection().document().collection().where().where().limit().get().to_dict.side_effect = [
         neighbor_left,
         neighbor_right,
@@ -762,10 +777,14 @@ def test_export_model_predictions_overlapping_neighbors(
     # Build expected output data
     expected_series = pd.Series(
         {
-            "8d8f2c80c1586ff": 8.0, # Average of prediction values 10, 11, 12, 4, 5, 6 (from current chunk)
-            "8d8f2c80c15bc3f": 26.2857142857, # Average of prediction values 25, 26, 27, 20, 21, (from current chunk) and 32, 33 (from bottom neighbor chunk)
-            "8d8f2c80c15bd3f": 11.5, # Average of prediction values  14, 15, 8, 9 (from current chunk)
-            "8d8f2c80c15bd7f": 22.714285714, # Average of prediction values 28, 29, 22, 23, 24, 16, 17 (from current chunk)
+            "8d8f2c80c1586ff": 8.0,  # Average of prediction values 10, 11, 12,
+            # 4, 5, 6 (from current chunk)
+            "8d8f2c80c15bc3f": 26.2857142857,  # Average of prediction values 25, 26,
+            # 27, 20, 21, (from current chunk) and 32, 33 (from bottom neighbor chunk)
+            "8d8f2c80c15bd3f": 11.5,  # Average of prediction values  14, 15, 8,
+            # 9 (from current chunk)
+            "8d8f2c80c15bd7f": 22.714285714,  # Average of prediction values 28, 29,
+            # 22, 23, 24, 16, 17 (from current chunk)
         }
     )
 
