@@ -8,6 +8,7 @@ from pandas import testing as pd_testing
 import pytest
 import main
 from unittest import mock
+from typing import Any, Dict
 
 
 def test_export_model_predictions_invalid_object_name() -> None:
@@ -79,7 +80,7 @@ def test_export_model_predictions_invalid_study_area(
         mock_fd.__iter__.return_value = iter(predictions.splitlines())
 
     # Build mock Firestore document
-    metadata = {
+    metadata: Dict[str, Any] = {
         "name": "study_area_name",
         "crs": "EPSG:32618",
         "row_count": 2,
@@ -129,7 +130,7 @@ def test_export_model_predictions_missing_chunk(
         mock_fd.__iter__.return_value = iter(predictions.splitlines())
 
     # Build mock Firestore document
-    metadata = {
+    metadata: Dict[str, Any] = {
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
@@ -177,7 +178,7 @@ def test_export_model_predictions_invalid_chunk(
         mock_fd.__iter__.return_value = iter(predictions.splitlines())
 
     # Build mock Firestore document
-    metadata = {
+    metadata: Dict[str, Any] = {
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
@@ -227,7 +228,7 @@ def test_export_model_predictions_missing_predictions(
         mock_fd.__iter__.return_value = iter(predictions.splitlines())
 
     # Build mock Firestore document
-    metadata = {
+    metadata: Dict[str, Any] = {
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
@@ -281,7 +282,7 @@ def test_export_model_predictions_too_many_predictions(
         mock_fd.__iter__.return_value = iter(predictions.splitlines())
 
     # Build mock Firestore document
-    metadata = {
+    metadata: Dict[str, Any] = {
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
@@ -329,7 +330,7 @@ def test_export_model_predictions_missing_expected_neighbor_chunk(
         mock_fd.__iter__.return_value = iter(predictions.splitlines())
 
     # Build mock Firestore document
-    metadata = {
+    metadata: Dict[str, Any] = {
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
@@ -384,7 +385,7 @@ def test_export_model_predictions_invalid_neighbor_chunk(
         mock_fd.__iter__.return_value = iter(predictions.splitlines())
 
     # Build mock Firestore document
-    metadata = {
+    metadata: Dict[str, Any] = {
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
@@ -448,7 +449,7 @@ def test_export_model_predictions_neighbor_chunk_missing_predictions(
         )  # Predictions for current chunk only
 
     # Build mock Firestore document
-    metadata = {
+    metadata: Dict[str, Any] = {
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
@@ -508,7 +509,7 @@ def test_export_model_predictions_h3_centroids_within_chunk(
         mock_fd.__iter__.side_effect = predictions.splitlines().__iter__
 
     # Build mock Firestore document
-    metadata = {
+    metadata: Dict[str, Any] = {
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
@@ -585,7 +586,7 @@ def test_export_model_predictions_h3_centroids_outside_chunk(
         mock_fd.__iter__.side_effect = predictions.splitlines().__iter__
 
     # Build mock Firestore document
-    metadata = {
+    metadata: Dict[str, Any] = {
         "name": "study_area_name",
         "cell_size": 5,
         "crs": "EPSG:32618",
@@ -683,7 +684,7 @@ def test_export_model_predictions_overlapping_neighbors(
         ]  # Current chunk + 1 intersecting neighbor
 
     # Build mock Firestore document
-    metadata = {
+    metadata: Dict[str, Any] = {
         "name": "study_area_name",
         "cell_size": 3,
         "crs": "EPSG:32618",
