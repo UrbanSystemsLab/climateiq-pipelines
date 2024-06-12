@@ -351,9 +351,9 @@ def test_export_model_predictions_missing_expected_neighbor_chunk(
     )
 
     # Build neighbor chunk data.
-    mock_firestore_client().collection().document().collection().where().where().limit().get().exists = (
-        False  # Neighbor chunks do not exist.
-    )
+    (
+        mock_firestore_client().collection().document().collection()
+    ).where().where().limit().get().exists = False  # Neighbor chunks do not exist.
 
     with pytest.raises(ValueError) as exc_info:
         main.export_model_predictions(event)
@@ -407,13 +407,13 @@ def test_export_model_predictions_invalid_neighbor_chunk(
 
     # Build neighbor chunk data.
     neighbor_metadata = metadata["chunks"]["chunk-id"].copy()
-    mock_firestore_client().collection().document().collection().where().where().limit().get().id = (
-        "neighbor-chunk-id"
-    )
+    (
+        mock_firestore_client().collection().document().collection().where().where()
+    ).limit().get().id = "neighbor-chunk-id"
     neighbor_metadata.pop("row_count")  # Missing "row_count" required field
-    mock_firestore_client().collection().document().collection().where().where().limit().get().to_dict.return_value = (
-        neighbor_metadata
-    )
+    (
+        mock_firestore_client().collection().document().collection().where().where()
+    ).limit().get().to_dict.return_value = neighbor_metadata
 
     with pytest.raises(ValueError) as exc_info:
         main.export_model_predictions(event)
@@ -471,12 +471,12 @@ def test_export_model_predictions_neighbor_chunk_missing_predictions(
 
     # Build neighbor chunk data.
     neighbor_metadata = metadata["chunks"]["chunk-id"].copy()
-    mock_firestore_client().collection().document().collection().where().where().limit().get().id = (
-        "neighbor-chunk-id"
-    )
-    mock_firestore_client().collection().document().collection().where().where().limit().get().to_dict.return_value = (
-        neighbor_metadata
-    )
+    (
+        mock_firestore_client().collection().document().collection().where().where()
+    ).limit().get().id = "neighbor-chunk-id"
+    (
+        mock_firestore_client().collection().document().collection().where().where()
+    ).limit().get().to_dict.return_value = neighbor_metadata
 
     with pytest.raises(ValueError) as exc_info:
         main.export_model_predictions(event)
@@ -505,14 +505,7 @@ def test_export_model_predictions_h3_centroids_within_chunk(
     # Build mock Storage object
     predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}\n'
     with mock_storage_client().bucket("").blob("").open() as mock_fd:
-        mock_fd.__iter__.side_effect = [
-            iter(predictions.splitlines()),
-            iter(predictions.splitlines()),
-            iter(predictions.splitlines()),
-            iter(predictions.splitlines()),
-            iter(predictions.splitlines()),
-            iter(predictions.splitlines()),
-        ]  # Current chunk + 5 valid neighbors: {(0, 1), (2, 1), (0, 0), (2, 0), (1, 0)}
+        mock_fd.__iter__.side_effect = predictions.splitlines().__iter__
 
     # Build mock Firestore document
     metadata = {
@@ -538,12 +531,12 @@ def test_export_model_predictions_h3_centroids_within_chunk(
 
     # Build neighbor chunk data.
     neighbor_metadata = metadata["chunks"]["chunk-id"].copy()
-    mock_firestore_client().collection().document().collection().where().where().limit().get().id = (
-        "neighbor-chunk-id"
-    )
-    mock_firestore_client().collection().document().collection().where().where().limit().get().to_dict.return_value = (
-        neighbor_metadata
-    )
+    (
+        mock_firestore_client().collection().document().collection().where().where()
+    ).limit().get().id = "neighbor-chunk-id"
+    (
+        mock_firestore_client().collection().document().collection().where().where()
+    ).limit().get().to_dict.return_value = neighbor_metadata
 
     # Build expected output data (neighbor chunks have same data as current chunk in
     # this test so prediction values stay the same after aggregation.)
@@ -589,14 +582,7 @@ def test_export_model_predictions_h3_centroids_outside_chunk(
     [19, 20, 21, 22, 23, 24]]}\n'
 
     with mock_storage_client().bucket("").blob("").open() as mock_fd:
-        mock_fd.__iter__.side_effect = [
-            iter(predictions.splitlines()),
-            iter(predictions.splitlines()),
-            iter(predictions.splitlines()),
-            iter(predictions.splitlines()),
-            iter(predictions.splitlines()),
-            iter(predictions.splitlines()),
-        ]  # Current chunk + 5 valid neighbors: {(0, 1), (2, 1), (0, 0), (2, 0), (1, 0)}
+        mock_fd.__iter__.side_effect = predictions.splitlines().__iter__
 
     # Build mock Firestore document
     metadata = {
@@ -622,12 +608,12 @@ def test_export_model_predictions_h3_centroids_outside_chunk(
 
     # Build neighbor chunk data.
     neighbor_metadata = metadata["chunks"]["chunk-id"].copy()
-    mock_firestore_client().collection().document().collection().where().where().limit().get().id = (
-        "neighbor-chunk-id"
-    )
-    mock_firestore_client().collection().document().collection().where().where().limit().get().to_dict.return_value = (
-        neighbor_metadata
-    )
+    (
+        mock_firestore_client().collection().document().collection().where().where()
+    ).limit().get().id = "neighbor-chunk-id"
+    (
+        mock_firestore_client().collection().document().collection().where().where()
+    ).limit().get().to_dict.return_value = neighbor_metadata
 
     # Build expected output data (neighbor chunks have same data as current chunk in
     # this test so prediction values stay the same after aggregation.)
@@ -759,14 +745,18 @@ def test_export_model_predictions_overlapping_neighbors(
         "x_index": 1,
         "y_index": 0,
     }
-    mock_firestore_client().collection().document().collection().where().where().limit().get().id.side_effect = [
+    (
+        mock_firestore_client().collection().document().collection().where().where()
+    ).limit().get().id.side_effect = [
         "neighbor-chunk-left",
         "neighbor-chunk-right",
         "neighbor-chunk-bottom-left",
         "neighbor-chunk-bottom-right",
         "neighbor-chunk-bottom",
     ]
-    mock_firestore_client().collection().document().collection().where().where().limit().get().to_dict.side_effect = [
+    (
+        mock_firestore_client().collection().document().collection().where().where()
+    ).limit().get().to_dict.side_effect = [
         neighbor_left,
         neighbor_right,
         neighbor_bottom_left,
