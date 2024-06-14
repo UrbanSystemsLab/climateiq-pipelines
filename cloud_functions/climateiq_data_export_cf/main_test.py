@@ -44,9 +44,9 @@ def test_export_model_predictions_missing_study_area(
     event = http.CloudEvent(attributes, data)
 
     # Build mock Storage object
-    predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}\n'
+    predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}'
     with mock_storage_client().bucket("").blob("").open() as mock_fd:
-        mock_fd.__iter__.return_value = iter(predictions.splitlines())
+        mock_fd.__iter__.return_value = [predictions]
 
     # Build mock Firestore document
     mock_firestore_client().collection("").document(
@@ -75,9 +75,9 @@ def test_export_model_predictions_invalid_study_area(
     event = http.CloudEvent(attributes, data)
 
     # Build mock Storage object
-    predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}\n'
+    predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}'
     with mock_storage_client().bucket("").blob("").open() as mock_fd:
-        mock_fd.__iter__.return_value = iter(predictions.splitlines())
+        mock_fd.__iter__.return_value = [predictions]
 
     # Build mock Firestore document
     metadata: Dict[str, Any] = {
@@ -125,9 +125,9 @@ def test_export_model_predictions_missing_chunk(
     event = http.CloudEvent(attributes, data)
 
     # Build mock Storage object
-    predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}\n'
+    predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}'
     with mock_storage_client().bucket("").blob("").open() as mock_fd:
-        mock_fd.__iter__.return_value = iter(predictions.splitlines())
+        mock_fd.__iter__.return_value = [predictions]
 
     # Build mock Firestore document
     metadata: Dict[str, Any] = {
@@ -173,9 +173,9 @@ def test_export_model_predictions_invalid_chunk(
     event = http.CloudEvent(attributes, data)
 
     # Build mock Storage object
-    predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}\n'
+    predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}'
     with mock_storage_client().bucket("").blob("").open() as mock_fd:
-        mock_fd.__iter__.return_value = iter(predictions.splitlines())
+        mock_fd.__iter__.return_value = [predictions]
 
     # Build mock Firestore document
     metadata: Dict[str, Any] = {
@@ -279,7 +279,7 @@ def test_export_model_predictions_too_many_predictions(
         '{"instance": [2], "prediction": [[1, 2, 3], [4, 5, 6]]}\n'
     )
     with mock_storage_client().bucket("").blob("").open() as mock_fd:
-        mock_fd.__iter__.return_value = iter(predictions.splitlines())
+        mock_fd.__iter__.return_value = predictions.splitlines()
 
     # Build mock Firestore document
     metadata: Dict[str, Any] = {
@@ -325,9 +325,9 @@ def test_export_model_predictions_missing_expected_neighbor_chunk(
     event = http.CloudEvent(attributes, data)
 
     # Build mock Storage object
-    predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}\n'
+    predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}'
     with mock_storage_client().bucket("").blob("").open() as mock_fd:
-        mock_fd.__iter__.return_value = iter(predictions.splitlines())
+        mock_fd.__iter__.return_value = [predictions]
 
     # Build mock Firestore document
     metadata: Dict[str, Any] = {
@@ -380,9 +380,9 @@ def test_export_model_predictions_invalid_neighbor_chunk(
     event = http.CloudEvent(attributes, data)
 
     # Build mock Storage object
-    predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}\n'
+    predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}'
     with mock_storage_client().bucket("").blob("").open() as mock_fd:
-        mock_fd.__iter__.return_value = iter(predictions.splitlines())
+        mock_fd.__iter__.return_value = [predictions]
 
     # Build mock Firestore document
     metadata: Dict[str, Any] = {
@@ -442,7 +442,7 @@ def test_export_model_predictions_neighbor_chunk_missing_predictions(
     event = http.CloudEvent(attributes, data)
 
     # Build mock Storage object
-    predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}\n'
+    predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}'
     with mock_storage_client().bucket("").blob("").open() as mock_fd:
         mock_fd.__iter__.return_value = iter(
             predictions.splitlines()
