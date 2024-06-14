@@ -504,7 +504,7 @@ def test_export_model_predictions_h3_centroids_within_chunk(
     event = http.CloudEvent(attributes, data)
 
     # Build mock Storage object
-    predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}\n'
+    predictions = '{"instance": [1], "prediction": [[1, 2, 3], [4, 5, 6]]}'
     with mock_storage_client().bucket("").blob("").open() as mock_fd:
         mock_fd.__iter__.side_effect = predictions.splitlines().__iter__
 
@@ -580,7 +580,7 @@ def test_export_model_predictions_h3_centroids_outside_chunk(
     # Build mock Storage object
     predictions = '{"instance": [1], "prediction": [[1, 2, 3, 4, 5, 6], \
     [7, 8, 9, 10, 11, 12], [13, 14, 15, 16, 17, 18], \
-    [19, 20, 21, 22, 23, 24]]}\n'
+    [19, 20, 21, 22, 23, 24]]}'
 
     with mock_storage_client().bucket("").blob("").open() as mock_fd:
         mock_fd.__iter__.side_effect = predictions.splitlines().__iter__
@@ -669,12 +669,12 @@ def test_export_model_predictions_overlapping_neighbors(
     predictions = (
         '{"instance": [1], "prediction": [[1, 2, 3, 4, 5, 6],'
         "[7, 8, 9, 10, 11, 12], [13, 14, 15, 16, 17, 18], [19, 20, 21, 22, 23, 24],"
-        "[25, 26, 27, 28, 29, 30]]}\n"
+        "[25, 26, 27, 28, 29, 30]]}"
     )
     predictions_bottom = (
         '{"instance": [1], "prediction": [[31, 32, 33, 34, 35, 36],'
         "[37, 38, 39, 40, 41, 42], [43, 44, 45, 46, 47, 48], [49, 50, 51, 52, 53, 54],"
-        "[55, 56, 57, 58, 59, 60]]}\n"
+        "[55, 56, 57, 58, 59, 60]]}"
     )
 
     with mock_storage_client().bucket("").blob("").open() as mock_fd:
