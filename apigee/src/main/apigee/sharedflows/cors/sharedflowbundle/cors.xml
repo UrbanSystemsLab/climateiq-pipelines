@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<SharedFlowBundle revision="1" name="cors">
+<SharedFlowBundle revision="4" name="cors">
   <DisplayName/>
   <Description/>
-  <CreatedAt>1712262463865</CreatedAt>
-  <LastModifiedAt>1712262463865</LastModifiedAt>
+  <CreatedAt>1718633678981</CreatedAt>
+  <LastModifiedAt>1718633678981</LastModifiedAt>
   <Policies>
     <Policy>CORS-AddHeaders</Policy>
   </Policies>
