@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <ExtractVariables async="false" continueOnError="false" enabled="true" name="EV-AccessToken">
   <Header name="Cookie">
-    <Pattern ignoreCase="false">*climate_iq_access_token={access_token};*</Pattern>
+    <Pattern ignoreCase="false">*climateiq_access_token={access_token};*</Pattern>
   </Header>
 </ExtractVariables>
