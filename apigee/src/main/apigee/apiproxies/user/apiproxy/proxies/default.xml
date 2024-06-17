@@ -1,15 +1,25 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<ProxyEndpoint name="default">
+<ProxyEndpoint revision="1" name="default">
   <PreFlow name="PreFlow">
     <Request>
       <Step>
         <Name>FC-CORS</Name>
       </Step>
+      <Step>
+        <Name>FC-Authentication</Name>
+      </Step>
     </Request>
   </PreFlow>
-  <Flows/>
+  <PostFlow name="PostFlow">
+    <Request>
+      <Step>
+        <Name>AM-UserIdHeader</Name>
+        <Condition>accesstoken.climateiq_user_id != null</Condition>
+      </Step>
+    </Request>
+  </PostFlow>
   <HTTPProxyConnection>
-    <BasePath>/data</BasePath>
+    <BasePath>/user</BasePath>
     <!-- Listen only on the HTTPS endpoint -->
     <VirtualHost>secure</VirtualHost>
   </HTTPProxyConnection>
