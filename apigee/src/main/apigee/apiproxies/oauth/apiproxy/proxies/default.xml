@@ -6,6 +6,9 @@
         <Name>FC-CORS</Name>
       </Step>
       <Step>
+        <Name>SA-RateLimit</Name>
+      </Step>
+      <Step>
         <Name>RF-InvalidGrantType</Name>
         <Condition>request.formparam.grant_type != "urn:ietf:params:oauth:grant-type:jwt-bearer"</Condition>
       </Step>

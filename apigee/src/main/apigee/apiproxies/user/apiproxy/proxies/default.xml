@@ -6,6 +6,9 @@
         <Name>FC-CORS</Name>
       </Step>
       <Step>
+        <Name>SA-RateLimit</Name>
+      </Step>
+      <Step>
         <Name>FC-Authentication</Name>
       </Step>
     </Request>
