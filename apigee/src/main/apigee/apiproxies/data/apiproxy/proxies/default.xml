@@ -5,6 +5,9 @@
       <Step>
         <Name>FC-CORS</Name>
       </Step>
+      <Step>
+        <Name>SA-RateLimit</Name>
+      </Step>
     </Request>
   </PreFlow>
   <Flows/>

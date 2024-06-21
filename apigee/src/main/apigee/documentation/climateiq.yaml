@@ -1,0 +1,77 @@
+openapi: 3.0.0
+info:
+  title: ClimateIQ Hazard Data
+  version: 1.0.0
+servers:
+  - url: https://34.49.55.140.nip.io/data/
+
+paths:
+  /hazard/point:
+    get:
+      summary: Get hazard data for a specific point (latitude/longitude).
+      parameters:
+        - name: lat
+          in: query
+          description: Latitude of the point.
+          required: true
+          schema:
+            type: number
+            format: float
+        - name: lng
+          in: query
+          description: Longitude of the point.
+          required: true
+          schema:
+            type: number
+            format: float
+      responses:
+        '200':
+          description: Successful response containing hazard data for the point.
+
+  /hazard/polygon:
+    post:
+      summary: Get hazard data for a polygon defined by an array of points.
+      requestBody:
+        description: Array of points (latitude/longitude pairs) defining the polygon.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: array
+                items:
+                  type: number
+                  format: float
+                minItems: 2
+                maxItems: 2
+      responses:
+        '200':
+          description: Successful response containing hazard data for the polygon.
+
+  /hazard/admin_boundary:
+    get:
+      summary: Get hazard data for an administrative boundary.
+      parameters:
+        - name: admin_level
+          in: query
+          description: Administrative level (e.g., country, state, county).
+          required: true
+          schema:
+            type: string
+        - name: boundary_id
+          in: query
+          description: Unique identifier for the boundary.
+          required: true
+          schema:
+            type: string
+        - name: hazard_category
+          in: query
+          description: Category of hazard data (optional).
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response containing hazard data for the boundary.
+
+  

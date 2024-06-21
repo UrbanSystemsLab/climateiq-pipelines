@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<SpikeArrest continueOnError="false" enabled="true" name="SA-RateLimit">
+  <Rate>5ps</Rate>
+</SpikeArrest>

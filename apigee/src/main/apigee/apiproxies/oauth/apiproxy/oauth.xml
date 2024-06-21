@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<APIProxy revision="1" name="oauth">
+<APIProxy revision="2" name="oauth">
   <DisplayName>OAuthV2</DisplayName>
   <Description>Dispenses an OAuth 2.0 token.</Description>
-  <CreatedAt>1716992960411</CreatedAt>
-  <LastModifiedAt>1716992960411</LastModifiedAt>
+  <CreatedAt>1718735816615</CreatedAt>
+  <LastModifiedAt>1718735849840</LastModifiedAt>
   <BasePaths>/oauth/token</BasePaths>
   <Policies>
     <Policy>OAuthV2-GenerateAccessToken</Policy>
@@ -12,6 +12,7 @@
     <Policy>VerifyJWT-FirebaseIDToken</Policy>
     <Policy>AM-OAuthV2GrantType</Policy>
     <Policy>JS-CalculateAccessTokenExpirationTime</Policy>
+    <Policy>SA-RateLimit</Policy>
   </Policies>
   <ProxyEndpoints>
     <ProxyEndpoint>default</ProxyEndpoint>

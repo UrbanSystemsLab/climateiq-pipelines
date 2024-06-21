@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<APIProxy revision="1" name="user">
+<APIProxy revision="2" name="user">
   <DisplayName/>
   <Description/>
-  <CreatedAt>1718649251514</CreatedAt>
-  <LastModifiedAt>1718649906760</LastModifiedAt>
+  <CreatedAt>1718735915836</CreatedAt>
+  <LastModifiedAt>1718735915836</LastModifiedAt>
   <BasePaths>/user</BasePaths>
   <Policies>
     <Policy>FC-CORS</Policy>
     <Policy>AM-UserIdHeader</Policy>
     <Policy>FC-Authentication</Policy>
+    <Policy>SA-RateLimit</Policy>
   </Policies>
   <ProxyEndpoints>
     <ProxyEndpoint>default</ProxyEndpoint>
