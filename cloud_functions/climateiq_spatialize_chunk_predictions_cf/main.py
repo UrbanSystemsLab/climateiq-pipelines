@@ -1,17 +1,18 @@
+import base64
 import json
-
-from typing import Any
-from cloudevents import http
-import functions_framework
-import geopandas as gpd
-from google.cloud import firestore
-from google.cloud import storage
-from shapely import geometry
-from h3 import h3
 import pandas as pd
 import pathlib
 import numpy as np
+import functions_framework
+import geopandas as gpd
 
+from typing import Any
+from cloudevents import http
+from google.cloud import firestore, storage
+from shapely import geometry
+from h3 import h3
+
+INPUT_BUCKET_NAME = "climateiq-chunk-predictions"
 GLOBAL_CRS = "EPSG:4326"
 # CAUTION: Changing the H3 cell size may require updates to how many/which neighboring
 # chunks we process.
@@ -20,16 +21,15 @@ STUDY_AREAS_ID = "study_areas"
 CHUNKS_ID = "chunks"
 
 
-# Triggered by the "object finalized" Cloud Storage event type.
+# Triggered from a message on the "climateiq-spatialize-and-export-predictions"
+# Pub/Sub topic.
 @functions_framework.cloud_event
-def export_model_predictions(cloud_event: http.CloudEvent) -> None:
-    """This function is triggered when a new object is created or an existing
-    object is overwritten in the "climateiq-predictions" storage bucket.
+def subscribe(cloud_event: http.CloudEvent) -> None:
+    """This function spatializes model predictions for a single chunk and outputs a
+    CSV file containing H3 indexes along with associated predictions.
 
     Args:
-        cloud_event: The CloudEvent representing the storage event. The name
-        of the object should conform to the following pattern:
-        "<prediction_type>/<model_id>/<study_area_name>/<scenario_id>/<chunk_id>"
+        cloud_event: The CloudEvent representing the Pub/Sub message.
 
     Raises:
         ValueError: If the object name format, study area metadata, chunk / neighbor
@@ -37,18 +37,19 @@ def export_model_predictions(cloud_event: http.CloudEvent) -> None:
         NotImplementedError: The result which should be stored elsewhere. This is:
             a Series of h3 indices to the aggregated prediction.
     """
-    data = cloud_event.data
-    object_name = data["name"]
-    bucket_name = data["bucket"]
+    object_name = base64.b64decode(cloud_event.data["message"]["data"]).decode()
 
     # Extract components from the object name.
     path = pathlib.PurePosixPath(object_name)
-    if len(path.parts) != 5:
-        raise ValueError("Invalid object name format. Expected 5 components.")
+    if len(path.parts) != 6:
+        raise ValueError(
+            "Invalid object name format. Expected format: '<id>/<prediction_type>/"
+            "<model_id>/<study_area_name>/<scenario_id>/<chunk_id>'"
+        )
 
-    prediction_type, model_id, study_area_name, scenario_id, chunk_id = path.parts
+    id, prediction_type, model_id, study_area_name, scenario_id, chunk_id = path.parts
 
-    predictions = _read_chunk_predictions(bucket_name, object_name)
+    predictions = _read_chunk_predictions(object_name)
     study_area_metadata, chunks_ref = _get_study_area_metadata(study_area_name)
     chunk_metadata = _get_chunk_metadata(study_area_metadata, chunk_id)
 
@@ -60,7 +61,6 @@ def export_model_predictions(cloud_event: http.CloudEvent) -> None:
         study_area_metadata,
         chunk_metadata,
         spatialized_predictions,
-        bucket_name,
         object_name,
         chunks_ref,
     )
@@ -72,12 +72,11 @@ def export_model_predictions(cloud_event: http.CloudEvent) -> None:
 
 # TODO: Modify this logic once CNN output schema is confirmed. Also update to
 # account for errors and special values.
-def _read_chunk_predictions(bucket_name: str, object_name: str) -> np.ndarray:
+def _read_chunk_predictions(object_name: str) -> np.ndarray:
     """Reads model predictions for a given chunk from GCS and outputs
     these predictions in a 2D array.
 
     Args:
-        bucket_name: The name of the GCS bucket containing the predictions.
         object_name: The name of the chunk object to read.
 
     Returns:
@@ -87,14 +86,13 @@ def _read_chunk_predictions(bucket_name: str, object_name: str) -> np.ndarray:
         ValueError: If the predictions file format is invalid.
     """
     storage_client = storage.Client()
-    bucket = storage_client.bucket(bucket_name)
+    bucket = storage_client.bucket(INPUT_BUCKET_NAME)
     blob = bucket.blob(object_name)
 
     with blob.open() as fd:
         fd_iter = iter(fd)
         line = next(fd_iter, None)
-        # Vertex AI will output one predictions file per chunk so the file is
-        # expected to contain only one prediction.
+        # The file is expected to contain only one prediction.
         if line is None:
             raise ValueError(f"Predictions file: {object_name} is missing.")
 
@@ -107,13 +105,12 @@ def _read_chunk_predictions(bucket_name: str, object_name: str) -> np.ndarray:
 
 
 def _read_neighbor_chunk_predictions(
-    bucket_name: str, object_name: str, neighbor_chunk_id: str
+    object_name: str, neighbor_chunk_id: str
 ) -> np.ndarray:
     """Reads model predictions for a neighbor chunk from GCS and outputs
     these predictions in a 2D array.
 
     Args:
-        bucket_name: The name of the GCS bucket containing the predictions.
         object_name: The name of the chunk object this cloud function is currently
         processing. Used to construct the object name of the neighbor chunk.
         neighbor_chunk_id: The id of the neighbor chunk object to read.
@@ -125,11 +122,14 @@ def _read_neighbor_chunk_predictions(
         ValueError: If the predictions file format is invalid.
     """
     path = pathlib.PurePosixPath(object_name)
-    if len(path.parts) != 5:
-        raise ValueError("Invalid object name format. Expected 5 components.")
+    if len(path.parts) != 6:
+        raise ValueError(
+            "Invalid object name format. Expected format: '<id>/<prediction_type>/"
+            "<model_id>/<study_area_name>/<scenario_id>/<chunk_id>"
+        )
     *prefix, current_chunk_id = path.parts
     neighbor_object_name = pathlib.PurePosixPath(*prefix, neighbor_chunk_id)
-    return _read_chunk_predictions(bucket_name, str(neighbor_object_name))
+    return _read_chunk_predictions(str(neighbor_object_name))
 
 
 def _get_study_area_metadata(
@@ -333,7 +333,6 @@ def _calculate_h3_indexes(
     study_area_metadata: dict,
     chunk_metadata: dict,
     spatialized_predictions: pd.DataFrame,
-    bucket_name: str,
     object_name: str,
     chunks_ref: Any,
 ) -> pd.Series:
@@ -349,7 +348,6 @@ def _calculate_h3_indexes(
         chunk_metadata: A dictionary containing metadata for the chunk.
         spatialized_predictions: A DataFrame containing the lat/lon coordinates of cell
         centroids in a single chunk along with associated predictions
-        bucket_name: The name of the GCS bucket containing model predictions.
         object_name: The name of the chunk object this cloud function is currently
         processing. Used to construct the GCS object name of the neighbor chunk.
         chunks_ref: A reference to the chunks collection in Firestore, used to
@@ -394,7 +392,6 @@ def _calculate_h3_indexes(
         chunk_metadata,
         boundary_h3_cells,
         spatialized_predictions,
-        bucket_name,
         object_name,
         chunks_ref,
     )
@@ -405,7 +402,6 @@ def _aggregate_h3_predictions(
     chunk_metadata: dict,
     boundary_h3_cells: np.ndarray,
     spatialized_predictions: pd.DataFrame,
-    bucket_name: str,
     object_name: str,
     chunks_ref: Any,
 ) -> pd.Series:
@@ -419,7 +415,6 @@ def _aggregate_h3_predictions(
         intersect with the chunk boundary.
         spatialized_predictions: A DataFrame containing H3 indexes and predictions
         for a single chunk. This input DataFrame may contain duplicate H3 indexes.
-        bucket_name: The name of the GCS bucket containing model predictions.
         object_name: The name of the chunk object this cloud function is currently
         processing. Used to construct the GCS object name of the neighbor chunk.
         chunks_ref: A reference to the chunks collection in Firestore, used to
@@ -501,7 +496,7 @@ def _aggregate_h3_predictions(
         # duplicate H3 indexes to input spatialized_predictions.
         if intersects:
             neighbor_chunk_predictions = _read_neighbor_chunk_predictions(
-                bucket_name, object_name, neighbor_chunk_id
+                object_name, neighbor_chunk_id
             )
             neighbor_chunk_spatialized_predictions = (
                 _build_spatialized_model_predictions(
