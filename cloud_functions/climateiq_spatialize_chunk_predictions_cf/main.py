@@ -13,6 +13,7 @@ from shapely import geometry
 from h3 import h3
 
 INPUT_BUCKET_NAME = "climateiq-chunk-predictions"
+OUTPUT_BUCKET_NAME = "climateiq-spatialized-chunk-predictions"
 GLOBAL_CRS = "EPSG:4326"
 # CAUTION: Changing the H3 cell size may require updates to how many/which neighboring
 # chunks we process.
@@ -26,7 +27,7 @@ CHUNKS_ID = "chunks"
 @functions_framework.cloud_event
 def subscribe(cloud_event: http.CloudEvent) -> None:
     """This function spatializes model predictions for a single chunk and outputs a
-    CSV file containing H3 indexes along with associated predictions.
+    CSV file to GCS containing H3 indexes along with associated predictions.
 
     Args:
         cloud_event: The CloudEvent representing the Pub/Sub message.
@@ -34,8 +35,6 @@ def subscribe(cloud_event: http.CloudEvent) -> None:
     Raises:
         ValueError: If the object name format, study area metadata, chunk / neighbor
         chunk metadata or predictions file format is invalid.
-        NotImplementedError: The result which should be stored elsewhere. This is:
-            a Series of h3 indices to the aggregated prediction.
     """
     object_name = base64.b64decode(cloud_event.data["message"]["data"]).decode()
 
@@ -65,9 +64,14 @@ def subscribe(cloud_event: http.CloudEvent) -> None:
         chunks_ref,
     )
 
-    # Set the error message to the Series' json string for testing
-    # purposes. In the actual implementation, the Series should be stored somewhere.
-    raise NotImplementedError(h3_predictions.to_json())
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(OUTPUT_BUCKET_NAME)
+    blob = bucket.blob(
+        f"{id}/{prediction_type}/{model_id}/{study_area_name}/{scenario_id}/{chunk_id}"
+        ".csv"
+    )
+    with blob.open("w+") as fd:
+        h3_predictions.to_csv(fd)
 
 
 # TODO: Modify this logic once CNN output schema is confirmed. Also update to
