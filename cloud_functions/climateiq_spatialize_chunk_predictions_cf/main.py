@@ -2,6 +2,7 @@ import base64
 import json
 import pandas as pd
 import pathlib
+import os
 import numpy as np
 import functions_framework
 import geopandas as gpd
@@ -12,8 +13,10 @@ from google.cloud import firestore, storage
 from shapely import geometry
 from h3 import h3
 
-INPUT_BUCKET_NAME = "climateiq-chunk-predictions"
-OUTPUT_BUCKET_NAME = "climateiq-spatialized-chunk-predictions"
+INPUT_BUCKET_NAME = os.environ.get("BUCKET_PREFIX", "") + "climateiq-chunk-predictions"
+OUTPUT_BUCKET_NAME = (
+    os.environ.get("BUCKET_PREFIX", "") + "climateiq-spatialized-chunk-predictions"
+)
 GLOBAL_CRS = "EPSG:4326"
 # CAUTION: Changing the H3 cell size may require updates to how many/which neighboring
 # chunks we process.

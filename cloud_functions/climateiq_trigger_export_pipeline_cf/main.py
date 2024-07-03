@@ -1,12 +1,13 @@
 import functions_framework
 import pathlib
 import json
+import os
 
 from google import cloud
 from cloudevents import http
 
-INPUT_BUCKET_NAME = "climateiq-predictions"
-OUTPUT_BUCKET_NAME = "climateiq-chunk-predictions"
+INPUT_BUCKET_NAME = os.environ.get("BUCKET_PREFIX", "") + "climateiq-predictions"
+OUTPUT_BUCKET_NAME = os.environ.get("BUCKET_PREFIX", "") + "climateiq-chunk-predictions"
 CLIMATEIQ_PROJECT_ID = "climateiq"
 CLIMATEIQ_EXPORT_PIPELINE_TOPIC_ID = "climateiq-spatialize-and-export-predictions"
 
