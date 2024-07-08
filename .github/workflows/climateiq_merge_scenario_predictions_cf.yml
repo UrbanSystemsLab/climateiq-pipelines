@@ -1,24 +1,24 @@
 # This workflow will install Python dependencies, run tests and lint with a single version of Python
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
 
-name: climateiq_merge_output_cf
+name: climateiq_merge_scenario_predictions_cf
 
 on:
   push:
     branches: [ "main" ]
     paths:
-      - "cloud_functions/climateiq_merge_output_cf/**"
+      - "cloud_functions/climateiq_merge_scenario_predictions_cf/**"
   pull_request:
     branches: [ "main" ]
     paths:
-      - "cloud_functions/climateiq_merge_output_cf/**"
+      - "cloud_functions/climateiq_merge_scenario_predictions_cf/**"
 
 permissions:
   contents: read
 
 jobs:
-  climateiq_merge_output_cf:
-    name: climateiq_merge_output_cf CI
+  climateiq_merge_scenario_predictions_cf:
+    name: climateiq_merge_scenario_predictions_cf CI
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -29,17 +29,17 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        cd cloud_functions/climateiq_merge_output_cf
+        cd cloud_functions/climateiq_merge_scenario_predictions_cf
         pip install -r requirements.txt
     - name: Lint with flake8
       run: |
-        flake8 cloud_functions/climateiq_merge_output_cf --show-source --statistics
+        flake8 cloud_functions/climateiq_merge_scenario_predictions_cf --show-source --statistics
     - name: Ensure black auto-formatter has run
       run: |
-        black cloud_functions/climateiq_merge_output_cf --check
+        black cloud_functions/climateiq_merge_scenario_predictions_cf --check
     - name: MyPy Type Checking
       run: |
-        mypy cloud_functions/climateiq_merge_output_cf
+        mypy cloud_functions/climateiq_merge_scenario_predictions_cf
     - name: Test with pytest
       run: |
-        pytest cloud_functions/climateiq_merge_output_cf
+        pytest cloud_functions/climateiq_merge_scenario_predictions_cf
