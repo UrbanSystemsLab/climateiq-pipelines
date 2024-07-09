@@ -3,12 +3,12 @@ import pathlib
 import json
 import os
 
-from google import cloud
+from google.cloud import storage, pubsub_v1
 from cloudevents import http
 
 INPUT_BUCKET_NAME = os.environ.get("BUCKET_PREFIX", "") + "climateiq-predictions"
 OUTPUT_BUCKET_NAME = os.environ.get("BUCKET_PREFIX", "") + "climateiq-chunk-predictions"
-CLIMATEIQ_PROJECT_ID = "climateiq"
+CLIMATEIQ_PROJECT_ID = "climateiq-" + os.environ.get("BUCKET_PREFIX", "").rstrip("-")
 CLIMATEIQ_EXPORT_PIPELINE_TOPIC_ID = "climateiq-spatialize-and-export-predictions"
 
 
@@ -26,37 +26,53 @@ def trigger_export_pipeline(cloud_event: http.CloudEvent) -> None:
 
     Args:
         cloud_event: The CloudEvent representing the storage event.
-
-    Raises:
-        ValueError: If the object name format is invalid.
     """
     data = cloud_event.data
     object_name = data["name"]
 
     # Extract components from the object name and determine the total number of
     # output prediction files.
+    #
+    # Note: Invalid object name is a non-retriable error so we return instead
+    # of throwing an exception (which would trigger retries).
+    expected_format = (
+        "<id>/<prediction_type>/<model_id>/<study_area_name>/"
+        "<scenario_id>/prediction.results-<file_number>-of-{number_of_files_generated}"
+    )
     path = pathlib.PurePosixPath(object_name)
     if len(path.parts) != 6:
-        raise ValueError(
-            "Invalid object name format. Expected format: '<id>/<prediction_type>/"
-            "<model_id>/<study_area_name>/<scenario_id>/prediction.results-"
-            "<file_number>-of-{number_of_files_generated}'"
+        print(
+            f"Invalid object name format. Expected format: '{expected_format}'\n"
+            f"Actual name: '{object_name}'"
         )
+        return
     id, prediction_type, model_id, study_area_name, scenario_id, filename = path.parts
     if filename.count("-") != 3:
-        raise ValueError(
-            "Invalid object name format. Expected format: '<id>/<prediction_type>/"
-            "<model_id>/<study_area_name>/<scenario_id>/prediction.results-"
-            "<file_number>-of-{number_of_files_generated}'"
+        print(
+            f"Invalid object name format. Expected format: '{expected_format}'\n"
+            f"Actual name: '{object_name}'"
         )
+        return
     _, _, _, file_count = filename.split("-")
-    total_prediction_files = int(file_count)
+    try:
+        total_prediction_files = int(file_count)
+    except ValueError:
+        print(
+            f"Invalid object name format. Expected format: '{expected_format}'\n"
+            f"Actual name: '{object_name}'"
+        )
+        return
 
     # Retrieve all input prediction files.
-    storage_client = cloud.storage.Client()
-    input_blobs = storage_client.list_blobs(
-        INPUT_BUCKET_NAME,
-        prefix=f"{id}/{prediction_type}/{model_id}/{study_area_name}/{scenario_id}",
+    storage_client = storage.Client()
+    input_blobs = list(
+        storage_client.list_blobs(
+            INPUT_BUCKET_NAME,
+            prefix=(
+                f"{id}/{prediction_type}/{model_id}/{study_area_name}/"
+                f"{scenario_id}/prediction.results"
+            ),
+        )
     )
     total_input_blobs = len(input_blobs)
     if total_input_blobs != total_prediction_files:
@@ -82,7 +98,7 @@ def trigger_export_pipeline(cloud_event: http.CloudEvent) -> None:
 
     # Once all output files have been written, publish pubsub message per chunk to kick
     # off export pipeline.
-    publisher = cloud.pubsub_v1.PublisherClient()
+    publisher = pubsub_v1.PublisherClient()
     topic_path = publisher.topic_path(
         CLIMATEIQ_PROJECT_ID, CLIMATEIQ_EXPORT_PIPELINE_TOPIC_ID
     )
@@ -92,4 +108,4 @@ def trigger_export_pipeline(cloud_event: http.CloudEvent) -> None:
             data=output_filename.encode("utf-8"),
             origin="climateiq_trigger_export_pipeline_cf",
         )
-        future.result()
+        print(future.result())

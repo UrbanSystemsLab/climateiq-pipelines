@@ -1,6 +1,7 @@
 import main
-import pytest
+import io
 
+from contextlib import redirect_stdout
 from unittest import mock
 from cloudevents import http
 from google.cloud import storage, pubsub_v1
@@ -29,14 +30,16 @@ def test_trigger_export_pipeline_invalid_object_name():
     }
     event = http.CloudEvent(attributes, data)
 
-    with pytest.raises(ValueError) as exc_info:
+    output = io.StringIO()
+    with redirect_stdout(output):
         main.trigger_export_pipeline(event)
 
-    assert (
+    expected_error = (
         "Invalid object name format. Expected format: '<id>/<prediction_type>/"
         "<model_id>/<study_area_name>/<scenario_id>/prediction.results-"
-        "<file_number>-of-{number_of_files_generated}" in str(exc_info.value)
+        "<file_number>-of-{number_of_files_generated}'\nActual name: 'invalid_name'"
     )
+    assert expected_error in output.getvalue()
 
 
 @mock.patch.object(pubsub_v1, "PublisherClient", autospec=True)
