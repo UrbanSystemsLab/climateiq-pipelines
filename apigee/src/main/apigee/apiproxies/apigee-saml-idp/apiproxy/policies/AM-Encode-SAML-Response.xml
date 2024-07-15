@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<AssignMessage name="AM-Encode-SAML-Response">
+  <AssignVariable>
+    <Name>xmlcontent</Name>
+    <Ref>assertion.content</Ref>
+  </AssignVariable>
+  <!-- Compression is optional in the HTTP-POST binding. This SAML IDP does not
+       perform compression. -->
+  <AssignVariable>
+    <Name>SAMLResponse</Name>
+    <Template>{encodeBase64(xmlcontent)}</Template>
+  </AssignVariable>
+  <Set>
+    <Headers/>
+    <Payload contentType="application/json">{"saml_response": "{SAMLResponse}", "acs_url": "{session.ACSURL}"}</Payload>
+    <StatusCode>200</StatusCode>
+  </Set>
+</AssignMessage>

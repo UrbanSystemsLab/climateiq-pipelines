@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<VerifyJWT async="false" continueOnError="false" enabled="true" name="VerifyJWT-Firebase-Id-Token">
+  <Algorithm>RS256</Algorithm>
+  <Source>request.formparam.assertion</Source>
+  <PublicKey>
+    <JWKS uri="https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"/>
+  </PublicKey>
+  <Issuer>https://securetoken.google.com/climateiq</Issuer>
+  <Audience>climateiq</Audience>
+</VerifyJWT>

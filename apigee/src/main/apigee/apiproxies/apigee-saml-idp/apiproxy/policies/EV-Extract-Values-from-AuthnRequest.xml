@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ExtractVariables name="EV-Extract-Values-from-AuthnRequest">
+  <Source>saml_request_decoded</Source>
+  <VariablePrefix>extracted</VariablePrefix>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <XMLPayload>
+    <Namespaces>
+      <Namespace prefix="saml2p">urn:oasis:names:tc:SAML:2.0:protocol</Namespace>
+      <Namespace prefix="saml2">urn:oasis:names:tc:SAML:2.0:assertion</Namespace>
+    </Namespaces>
+    <Variable name="ACSURL" type="string">
+      <XPath>/saml2p:AuthnRequest/@AssertionConsumerServiceURL</XPath>
+    </Variable>
+    <Variable name="login_assertion_id" type="string">
+      <XPath>/saml2p:AuthnRequest/@ID</XPath>
+    </Variable>
+    <Variable name="destination" type="string">
+      <XPath>/saml2p:AuthnRequest/@Destination</XPath>
+    </Variable>
+    <Variable name="request_issue_instant" type="string">
+      <XPath>/saml2p:AuthnRequest/@IssueInstant</XPath>
+    </Variable>
+    <Variable name="request_issuer" type="string">
+      <XPath>/saml2p:AuthnRequest/saml2:Issuer/text()</XPath>
+    </Variable>
+  </XMLPayload>
+</ExtractVariables>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Javascript name="JS-Check-Issue-Instant">
+  <Source>
+    <![CDATA[
+  var issueInstantString = context.getVariable('extracted.request_issue_instant');
+  var dIssue = new Date(issueInstantString);
+  var dNow = new Date();
+  var deltaInSeconds = (dNow.valueOf() - dIssue.valueOf())/1000;
+  if (deltaInSeconds > 45) {
+    throw new Error("Stale authentication request");
+  }
+  ]]>
+  </Source>
+</Javascript>

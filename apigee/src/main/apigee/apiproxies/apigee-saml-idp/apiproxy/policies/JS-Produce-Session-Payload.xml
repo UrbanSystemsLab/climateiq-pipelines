@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Javascript name="JS-Produce-Session-Payload">
+  <Source>
+    <![CDATA[
+  function gvar(varname) {
+   return context.getVariable('extracted.'+varname);
+  }
+  var keys = ['ACSURL', 'login_assertion_id', 'destination', 'issuer', 'request_issue_instant', 'request_issuer'];
+  var session = keys.reduce(function(a,key) { a[key]= gvar(key); return a;}, {});
+  var d = new Date();
+  var expiry = new Date(d.valueOf()+240*1000);
+  session.expiry = expiry.toISOString();
+  session.id = 'sess-' + context.getVariable('messageid');
+  context.setVariable('session_payload', JSON.stringify(session));
+  context.setVariable('session_id', session.id);
+  ]]>
+  </Source>
+</Javascript>

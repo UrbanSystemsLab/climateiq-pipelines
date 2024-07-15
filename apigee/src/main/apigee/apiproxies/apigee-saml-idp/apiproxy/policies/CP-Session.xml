@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<PopulateCache name="CP-Session">
+  <Source>session_payload</Source>
+  <Scope>Application</Scope>
+  <CacheKey>
+    <KeyFragment ref="session_id"/>
+  </CacheKey>
+  <ExpirySettings>
+    <TimeoutInSeconds>240</TimeoutInSeconds>
+  </ExpirySettings>
+</PopulateCache>

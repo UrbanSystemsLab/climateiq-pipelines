@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<RaiseFault name="RF-XML-Unknown-Request">
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+  <FaultResponse>
+    <Set>
+      <Payload contentType="application/xml">
+        <error>Unknown Request</error>
+      </Payload>
+      <StatusCode>404</StatusCode>
+    </Set>
+  </FaultResponse>
+</RaiseFault>

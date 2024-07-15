@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<GenerateSAMLAssertion name="SAML-Generate-Signed-Response" ignoreContentType="true">
+  <Issuer ref="idp_issuer"/>
+  <Subject ref="jwt.VerifyJWT-Firebase-Id-Token.decoded.claim.email"/>
+  <!-- the digest and signature algorithms -->
+  <DigestMethod>SHA256</DigestMethod>
+  <!-- SHA1 -->
+  <SignatureAlgorithm>rsa-sha256</SignatureAlgorithm>
+  <!-- rsa-sha1 -->
+  <!-- <CanonicalizationAlgorithm>
+</CanonicalizationAlgorithm> -->
+<!-- the key and cert for signing -->
+<KeyStore>
+  <Name ref="propertyset.settings.saml_keystore"/>
+  <Alias ref="propertyset.settings.saml_keyalias"/>
+</KeyStore>
+<!-- where to put the assertion -->
+<OutputVariable>
+  <FlowVariable>assertion.content</FlowVariable>
+  <Message name="assertion">
+    <Namespaces>
+      <Namespace prefix="samlp">urn:oasis:names:tc:SAML:2.0:protocol</Namespace>
+    </Namespaces>
+    <!-- This XPath must identify an existing element in the document. -->
+    <!-- The assertion will be inserted as a new child of this element. -->
+    <XPath>/samlp:Response</XPath>
+  </Message>
+</OutputVariable>
+<!-- The content of the assertion. -->
+<!-- Confoundingly, this MUST BE wrapped in a CDATA section. -->
+<Template ignoreUnresolvedVariables="false">
+  <![CDATA[
+    <saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
+                    ID="{messageid}"
+                    Version="2.0"
+                    IssueInstant="{issue_instant}">
+  <saml:Issuer>{idp_issuer}</saml:Issuer>
+  <saml:Subject>
+    <saml:NameID
+            Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">{jwt.VerifyJWT-Firebase-Id-Token.decoded.claim.email}</saml:NameID>
+    <saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">
+      <saml:SubjectConfirmationData
+              NotOnOrAfter="{session.expiry}"
+              Recipient="{session.ACSURL}"
+              InResponseTo="{session.login_assertion_id}"/>
+    </saml:SubjectConfirmation>
+  </saml:Subject>
+  <saml:Conditions NotBefore="{session.request_issue_instant}" NotOnOrAfter="{session.expiry}">
+    <saml:AudienceRestriction>
+      <saml:Audience>{session.request_issuer}</saml:Audience>
+    </saml:AudienceRestriction>
+  </saml:Conditions>
+  <saml:AuthnStatement AuthnInstant="{issue_instant}" SessionIndex="{saml.authnSessionIndex}">
+    <saml:AuthnContext>
+      <saml:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified</saml:AuthnContextClassRef>
+    </saml:AuthnContext>
+  </saml:AuthnStatement>
+  <saml:AttributeStatement>
+    <saml:Attribute Name="uid" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic">
+      <saml:AttributeValue>{jwt.VerifyJWT-Firebase-Id-Token.decoded.claim.user_id}</saml:AttributeValue>
+    </saml:Attribute>
+    <saml:Attribute Name="mail" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic">
+      <saml:AttributeValue>{jwt.VerifyJWT-Firebase-Id-Token.decoded.claim.email}</saml:AttributeValue>
+    </saml:Attribute>
+  </saml:AttributeStatement>
+</saml:Assertion>
+]]>
+</Template>
+</GenerateSAMLAssertion>

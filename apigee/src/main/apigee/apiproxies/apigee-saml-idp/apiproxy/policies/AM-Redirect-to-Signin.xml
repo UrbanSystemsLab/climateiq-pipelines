@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<AssignMessage name="AM-Redirect-to-Signin">
+  <Set>
+    <Headers>
+      <Header name="Location">{propertyset.settings.sign_in_redirect_url}{session_id}</Header>
+    </Headers>
+    <Payload contentType="text/plain">MOVED</Payload>
+    <StatusCode>302</StatusCode>
+  </Set>
+</AssignMessage>

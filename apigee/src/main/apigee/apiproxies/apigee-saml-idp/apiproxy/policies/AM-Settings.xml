@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<AssignMessage name="AM-Settings">
+  <AssignVariable>
+    <Name>idp_issuer</Name>
+    <Template ref="propertyset.settings.idp_issuer_tmpl"/>
+  </AssignVariable>
+</AssignMessage>

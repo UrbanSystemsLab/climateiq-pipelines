@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ExtractVariables name="EV-Extract-SAML-Request-Params">
+  <FormParam name="SAMLRequest">
+    <Pattern>{saml_request}</Pattern>
+  </FormParam>
+  <!-- Dev Portal does not pass a RelayState param -->
+  <FormParam name="RelayState">
+    <Pattern>{saml_relayState}</Pattern>
+  </FormParam>
+</ExtractVariables>

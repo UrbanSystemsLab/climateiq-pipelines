@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ProxyEndpoint name="idp">
+  <Description>A SAML Identity Provider, supporting service provider-initiated signon. Intended for use with the Apigee Integrated Developer portal.</Description>
+  <HTTPProxyConnection>
+    <BasePath>/apigee-saml-idp</BasePath>
+  </HTTPProxyConnection>
+  <DefaultFaultRule>
+    <AlwaysEnforce>true</AlwaysEnforce>
+    <Step>
+      <Name>AM-Inject-Proxy-Revision-Header</Name>
+    </Step>
+  </DefaultFaultRule>
+  <PreFlow name="PreFlow">
+    <Request>
+      <Step>
+        <Name>FC-CORS</Name>
+      </Step>
+      <Step>
+        <Name>AM-Settings</Name>
+      </Step>
+    </Request>
+    <Response>
+      <Step>
+        <Name>AM-Clean-Request-Headers-From-Response</Name>
+      </Step>
+    </Response>
+  </PreFlow>
+  <PostFlow name="PostFlow">
+    <Request/>
+    <Response>
+      <Step>
+        <Name>AM-Inject-Proxy-Revision-Header</Name>
+      </Step>
+    </Response>
+  </PostFlow>
+  <Flows>
+    <Flow name="Login">
+      <Description>Handle the "initiate authentication" event from the SP.</Description>
+      <Request>
+        <Step>
+          <Name>EV-Extract-SAML-Request-Params</Name>
+        </Step>
+        <Step>
+          <Name>AM-Decode-SAML-AuthnRequest</Name>
+        </Step>
+        <Step>
+          <Name>Java-XMLDSIG-Validate</Name>
+        </Step>
+        <Step>
+          <Name>RF-XML-Bad-Request</Name>
+          <Condition>NOT (xmldsig_valid = true)</Condition>
+        </Step>
+        <Step>
+          <Name>EV-Extract-Values-from-AuthnRequest</Name>
+        </Step>
+        <Step>
+          <Name>RF-XML-Bad-Request</Name>
+          <Condition>(extracted.request_issuer = null) OR
+          (extracted.request_issue_instant = null) OR
+          (extracted.ACSURL = null) OR
+          (extracted.login_assertion_id = null) OR
+          (extracted.destination = null)</Condition>
+        </Step>
+        <Step>
+          <Name>JS-Check-Issue-Instant</Name>
+        </Step>
+      </Request>
+      <Response>
+        <Step>
+          <Name>JS-Produce-Session-Payload</Name>
+        </Step>
+        <Step>
+          <Name>CP-Session</Name>
+        </Step>
+        <Step>
+          <!-- Redirect the user to a signin page, giving the session ID for the
+               above. -->
+          <Name>AM-Redirect-to-Signin</Name>
+        </Step>
+      </Response>
+      <Condition>(proxy.pathsuffix MatchesPath "/login")</Condition>
+    </Flow>
+    <Flow name="Auth-Complete">
+      <Description>Handle the "authentication complete" event from the signin page.</Description>
+      <Request>
+        <Step>
+          <Name>RF-XML-Bad-Request</Name>
+          <Condition>request.formparam.session_id = null OR request.formparam.assertion = null</Condition>
+        </Step>
+        <Step>
+          <Name>CL-Session</Name>
+        </Step>
+        <Step>
+          <Name>RF-XML-Bad-Request</Name>
+          <Condition>session_payload = null</Condition>
+        </Step>
+        <Step>
+          <Name>JS-Shred-Session</Name>
+        </Step>
+        <Step>
+          <Name>RF-XML-Bad-Request</Name>
+          <Condition>session.destination = null OR session.id != request.formparam.session_id</Condition>
+        </Step>
+        <Step>
+          <Name>VerifyJWT-Firebase-Id-Token</Name>
+        </Step>
+      </Request>
+      <Response>
+        <Step>
+          <Name>AM-Initialize-SAML-Assertion</Name>
+        </Step>
+        <Step>
+          <Name>SAML-Generate-Signed-Response</Name>
+        </Step>
+        <Step>
+          <Name>AM-Encode-SAML-Response</Name>
+        </Step>
+      </Response>
+      <Condition>request.verb == "POST" AND (proxy.pathsuffix MatchesPath "/authcomplete")</Condition>
+    </Flow>
+    <Flow name="unknown-request">
+      <Request>
+        <Step>
+          <Name>RF-XML-Unknown-Request</Name>
+        </Step>
+      </Request>
+      <Response/>
+    </Flow>
+  </Flows>
+  <RouteRule name="no-route"/>
+</ProxyEndpoint>
