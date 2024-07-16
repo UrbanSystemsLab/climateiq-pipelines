@@ -19,8 +19,8 @@ OUTPUT_BUCKET_NAME = (
 )
 # File name pattern for the CSVs for each scenario and chunk.
 CHUNK_FILE_NAME_PATTERN = (
-    r"(?P<batch_id>\w+)/(?P<prediction_type>\w+)/(?P<model_id>\w+)/"
-    r"(?P<study_area_name>\w+)/(?P<scenario_id>\w+)/(?P<chunk_id>\w+)\.csv"
+    r"(?P<batch_id>[^/]+)/(?P<prediction_type>[^/]+)/(?P<model_id>[^/]+)/"
+    r"(?P<study_area_name>[^/]+)/(?P<scenario_id>[^/]+)/(?P<chunk_id>[^/]+)\.csv"
 )
 # ID for the Study Areas collection in Firestore.
 STUDY_AREAS_COLLECTION_ID = "study_areas"
@@ -48,7 +48,12 @@ def merge_scenario_predictions(cloud_event: http.CloudEvent):
     object_name = data["name"]
     match = re.match(CHUNK_FILE_NAME_PATTERN, object_name)
     # Ignore files that don't match the pattern.
-    if not match:
+    if match is None:
+        print(
+            f"Invalid object name format. Expected format: '<id>/<prediction_type>/"
+            f"<model_id>/<study_area_name>/<scenario_id>/<chunk_id>'\n"
+            f"Actual name: '{object_name}'"
+        )
         return
 
     batch_id, prediction_type, model_id, study_area_name = (
@@ -68,7 +73,8 @@ def merge_scenario_predictions(cloud_event: http.CloudEvent):
     storage_client = storage.Client()
     input_bucket = storage_client.bucket(INPUT_BUCKET_NAME)
     blobs = storage_client.list_blobs(
-        INPUT_BUCKET_NAME, f"{batch_id}/{prediction_type}/{model_id}/{study_area_name}"
+        INPUT_BUCKET_NAME,
+        prefix=f"{batch_id}/{prediction_type}/{model_id}/{study_area_name}",
     )
     chunk_ids_by_scenario_id = _get_chunk_ids_to_scenario_id(blobs)
 
@@ -111,10 +117,10 @@ def merge_scenario_predictions(cloud_event: http.CloudEvent):
         blob_to_write = output_bucket.blob(output_file_name)
         with blob_to_write.open("w") as fd:
             # Open the blob and start writing a CSV file with the headers
-            # h3_index,scenario_0,scenario_1...
-            writer = csv.DictWriter(fd, fieldnames=["h3_index"] + scenario_ids)
+            # cell_code,scenario_0,scenario_1...
+            writer = csv.DictWriter(fd, fieldnames=["cell_code"] + scenario_ids)
             writer.writeheader()
-            predictions_by_h3_index: dict[str, dict] = collections.defaultdict(dict)
+            predictions_by_cell_code: dict[str, dict] = collections.defaultdict(dict)
             for scenario_id in scenario_ids:
                 object_name = (
                     f"{batch_id}/{prediction_type}/{model_id}/"
@@ -126,19 +132,19 @@ def merge_scenario_predictions(cloud_event: http.CloudEvent):
                     print(f"Not found: {error}")
                     return
                 for row in rows:
-                    predictions_by_h3_index[row["h3_index"]][scenario_id] = row[
+                    predictions_by_cell_code[row["h3_index"]][scenario_id] = row[
                         "prediction"
                     ]
-            for h3_index, predictions in predictions_by_h3_index.items():
+            for cell_code, predictions in predictions_by_cell_code.items():
                 missing_scenario_ids = set(scenario_ids) - set(predictions.keys())
                 if missing_scenario_ids:
                     print(
-                        f"Not found: Missing predictions for {h3_index} for "
+                        f"Not found: Missing predictions for {cell_code} for "
                         f"{', '.join(missing_scenario_ids)}."
                     )
                     return
-                predictions["h3_index"] = h3_index
-                # Output CSV will have the headers: h3_index,scenario_0,scenario_1...
+                predictions["cell_code"] = cell_code
+                # Output CSV will have the headers: cell_code,scenario_0,scenario_1...
                 writer.writerow(predictions)
 
 
@@ -232,7 +238,7 @@ def _files_complete(
 def _get_file_content(bucket: storage.Bucket, object_name: str) -> list[dict]:
     """Gets the content from a Blob.
 
-    Assumes Blob content is in CSV format with headers h3_index,prediction...
+    Assumes Blob content is in CSV format with headers cell_code,prediction...
 
     Args:
         bucket: The GCS bucket the Blob is in.

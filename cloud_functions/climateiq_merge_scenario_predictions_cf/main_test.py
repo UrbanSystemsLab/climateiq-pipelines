@@ -55,8 +55,8 @@ def _create_chunk_file(
     h3_indices_to_predictions: dict[str, float], tmp_path: str
 ) -> str:
     rows = ["h3_index,prediction"] + [
-        f"{h3_index},{prediction}"
-        for h3_index, prediction in h3_indices_to_predictions.items()
+        f"{cell_code},{prediction}"
+        for cell_code, prediction in h3_indices_to_predictions.items()
     ]
     with tempfile.NamedTemporaryFile("w+", dir=tmp_path, delete=False) as fd:
         fd.write("\n".join(rows))
@@ -133,10 +133,10 @@ def test_merge_scenario_predictions(
     main.merge_scenario_predictions(_create_pubsub_event())
 
     expected_chunk0_contents = (
-        "h3_index,scenario0,scenario1\n" "h300,0.0,1.0\n" "h301,0.01,1.01\n"
+        "cell_code,scenario0,scenario1\n" "h300,0.0,1.0\n" "h301,0.01,1.01\n"
     )
     expected_chunk1_contents = (
-        "h3_index,scenario0,scenario1\n" "h310,0.1,1.1\n" "h311,0.11,1.11\n"
+        "cell_code,scenario0,scenario1\n" "h310,0.1,1.1\n" "h311,0.11,1.11\n"
     )
     with open(output_files["batch/flood/model/nyc/chunk0.csv"]) as fd:
         assert fd.read() == expected_chunk0_contents
@@ -387,7 +387,7 @@ def test_merge_scenario_predictions_missing_chunk_prints_error(
 
 @mock.patch.object(storage, "Client", autospec=True)
 @mock.patch.object(firestore, "Client", autospec=True)
-def test_merge_scenario_predictions_missing_scenarios_for_h3_index_prints_error(
+def test_merge_scenario_predictions_missing_scenarios_for_cell_code_prints_error(
     mock_firestore_client, mock_storage_client, tmp_path
 ):
     _create_firestore_entries(mock_firestore_client, ["scenario0", "scenario1"], 2)
