@@ -1,18 +1,20 @@
 import base64
 import tempfile
+import io
+import contextlib
+import pandas as pd
 
 from cloudevents import http
-from google.cloud import storage, firestore
-import pandas as pd
-import pytest
-from typing import Any, Dict
+from google.cloud import firestore_v1
+from google.cloud import storage
+from typing import Any, Dict, List
 from unittest import mock
 
 import main
 
 
 def _create_tmpfile(contents: str, dir: str) -> str:
-    with tempfile.NamedTemporaryFile("w+", dir=dir, delete=False) as fd:
+    with tempfile.NamedTemporaryFile("w", dir=dir, delete=False) as fd:
         fd.write(contents)
     return fd.name
 
@@ -53,17 +55,19 @@ def test_spatialize_chunk_predictions_invalid_object_name() -> None:
         },
     )
 
-    with pytest.raises(ValueError) as exc_info:
-        main.subscribe(event)
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        main.spatialize_chunk_predictions(event)
 
     assert (
         "Invalid object name format. Expected format: '<id>/<prediction_type>/"
-        "<model_id>/<study_area_name>/<scenario_id>/<chunk_id>'" in str(exc_info.value)
+        "<model_id>/<study_area_name>/<scenario_id>/<chunk_id>'"
+        "\nActual name: 'invalid_name'" in output.getvalue()
     )
 
 
-@mock.patch.object(storage, "Client", autospec=True)
-@mock.patch.object(firestore, "Client", autospec=True)
+@mock.patch.object(storage.client, "Client", autospec=True)
+@mock.patch.object(firestore_v1, "Client", autospec=True)
 def test_spatialize_chunk_predictions_missing_study_area(
     mock_firestore_client, mock_storage_client
 ) -> None:
@@ -90,18 +94,20 @@ def test_spatialize_chunk_predictions_missing_study_area(
         mock_fd.__iter__.return_value = [predictions]
 
     # Build mock Firestore document
-    mock_firestore_client().collection("").document(
-        ""
-    ).get().exists = False  # Indicate study area doesn't exist
+    mock_study_area_ref = (
+        mock_firestore_client().collection("study_areas").document("study-area-name")
+    )
+    mock_study_area_ref.get().exists = False  # Indicate study area doesn't exist
 
-    with pytest.raises(ValueError) as exc_info:
-        main.subscribe(event)
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        main.spatialize_chunk_predictions(event)
 
-    assert 'Study area "study-area-name" does not exist' in str(exc_info.value)
+    assert 'Study area "study-area-name" does not exist' in output.getvalue()
 
 
-@mock.patch.object(storage, "Client", autospec=True)
-@mock.patch.object(firestore, "Client", autospec=True)
+@mock.patch.object(storage.client, "Client", autospec=True)
+@mock.patch.object(firestore_v1, "Client", autospec=True)
 def test_spatialize_chunk_predictions_invalid_study_area(
     mock_firestore_client, mock_storage_client
 ) -> None:
@@ -128,37 +134,42 @@ def test_spatialize_chunk_predictions_invalid_study_area(
         mock_fd.__iter__.return_value = [predictions]
 
     # Build mock Firestore document
-    metadata: Dict[str, Any] = {
+    study_area_metadata: Dict[str, Any] = {
         "name": "study_area_name",
         "crs": "EPSG:32618",
         "row_count": 2,
         "col_count": 3,
-        "chunks": {
-            "chunk-id": {
-                "row_count": 2,
-                "col_count": 3,
-                "x_ll_corner": 500,
-                "y_ll_corner": 100,
-                "x_index": 0,
-                "y_index": 0,
-            }
-        },
     }  # Missing "cell_size" required field
-    mock_firestore_client().collection().document().get().to_dict.return_value = (
-        metadata
+    chunks_metadata: List[Dict[str, Any]] = [
+        {
+            "id": "chunk-id",
+            "row_count": 2,
+            "col_count": 3,
+            "x_ll_corner": 500,
+            "y_ll_corner": 100,
+            "x_index": 0,
+            "y_index": 0,
+        }
+    ]
+    mock_study_area_ref = (
+        mock_firestore_client().collection("study_areas").document("study-area-name")
     )
+    mock_study_area_ref.get().to_dict.return_value = study_area_metadata
+    mock_chunks_ref = mock_study_area_ref.collection("chunks")
+    mock_chunks_ref.get.return_value = chunks_metadata
 
-    with pytest.raises(ValueError) as exc_info:
-        main.subscribe(event)
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        main.spatialize_chunk_predictions(event)
 
     assert (
         'Study area "study-area-name" is missing one or more required '
-        "fields: cell_size, crs, chunks" in str(exc_info.value)
+        "fields: cell_size, crs, row_count, col_count" in output.getvalue()
     )
 
 
-@mock.patch.object(storage, "Client", autospec=True)
-@mock.patch.object(firestore, "Client", autospec=True)
+@mock.patch.object(storage.client, "Client", autospec=True)
+@mock.patch.object(firestore_v1, "Client", autospec=True)
 def test_spatialize_chunk_predictions_missing_chunk(
     mock_firestore_client, mock_storage_client
 ) -> None:
@@ -185,35 +196,41 @@ def test_spatialize_chunk_predictions_missing_chunk(
         mock_fd.__iter__.return_value = [predictions]
 
     # Build mock Firestore document
-    metadata: Dict[str, Any] = {
+    study_area_metadata: Dict[str, Any] = {
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
         "row_count": 2,
         "col_count": 3,
-        "chunks": {
-            "missing-chunk-id": {
-                "row_count": 2,
-                "col_count": 3,
-                "x_ll_corner": 500,
-                "y_ll_corner": 100,
-                "x_index": 0,
-                "y_index": 0,
-            }
-        },
     }
-    mock_firestore_client().collection().document().get().to_dict.return_value = (
-        metadata
+    chunks_metadata: List[Dict[str, Any]] = [
+        {
+            "id": "missing-chunk-id",
+            "row_count": 2,
+            "col_count": 3,
+            "x_ll_corner": 500,
+            "y_ll_corner": 100,
+            "x_index": 0,
+            "y_index": 0,
+        }
+    ]
+    mock_study_area_ref = (
+        mock_firestore_client().collection("study_areas").document("study-area-name")
     )
+    mock_study_area_ref.get().to_dict.return_value = study_area_metadata
+    mock_chunks_ref = mock_study_area_ref.collection("chunks")
+    mock_chunks_ref.get.return_value = chunks_metadata
+    mock_chunks_ref.document("chunk-id").get().exists = False
 
-    with pytest.raises(ValueError) as exc_info:
-        main.subscribe(event)
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        main.spatialize_chunk_predictions(event)
 
-    assert 'Chunk "chunk-id" does not exist' in str(exc_info.value)
+    assert 'Chunk "chunk-id" does not exist' in output.getvalue()
 
 
-@mock.patch.object(storage, "Client", autospec=True)
-@mock.patch.object(firestore, "Client", autospec=True)
+@mock.patch.object(storage.client, "Client", autospec=True)
+@mock.patch.object(firestore_v1, "Client", autospec=True)
 def test_spatialize_chunk_predictions_invalid_chunk(
     mock_firestore_client, mock_storage_client
 ) -> None:
@@ -240,37 +257,43 @@ def test_spatialize_chunk_predictions_invalid_chunk(
         mock_fd.__iter__.return_value = [predictions]
 
     # Build mock Firestore document
-    metadata: Dict[str, Any] = {
+    study_area_metadata: Dict[str, Any] = {
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
         "row_count": 2,
         "col_count": 3,
-        "chunks": {
-            "chunk-id": {
-                "col_count": 3,
-                "x_ll_corner": 500,
-                "y_ll_corner": 100,
-                "x_index": 0,
-                "y_index": 0,
-            }
-        },
-    }  # Missing "row_count" required field
-    mock_firestore_client().collection().document().get().to_dict.return_value = (
-        metadata
+    }
+    chunks_metadata: List[Dict[str, Any]] = [
+        {
+            "id": "chunk-id",
+            "col_count": 3,
+            "x_ll_corner": 500,
+            "y_ll_corner": 100,
+            "x_index": 0,
+            "y_index": 0,  # Missing "row_count" required field
+        }
+    ]
+    mock_study_area_ref = (
+        mock_firestore_client().collection("study_areas").document("study-area-name")
     )
+    mock_study_area_ref.get().to_dict.return_value = study_area_metadata
+    mock_chunks_ref = mock_study_area_ref.collection("chunks")
+    mock_chunks_ref.get.return_value = chunks_metadata
+    mock_chunks_ref.document("chunk-id").get().to_dict.return_value = chunks_metadata[0]
 
-    with pytest.raises(ValueError) as exc_info:
-        main.subscribe(event)
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        main.spatialize_chunk_predictions(event)
 
     assert (
         'Chunk "chunk-id" is missing one or more required '
-        "fields: row_count, col_count, x_ll_corner, y_ll_corner" in str(exc_info.value)
+        "fields: row_count, col_count, x_ll_corner, y_ll_corner" in output.getvalue()
     )
 
 
-@mock.patch.object(storage, "Client", autospec=True)
-@mock.patch.object(firestore, "Client", autospec=True)
+@mock.patch.object(storage.client, "Client", autospec=True)
+@mock.patch.object(firestore_v1, "Client", autospec=True)
 def test_spatialize_chunk_predictions_missing_predictions(
     mock_firestore_client, mock_storage_client
 ) -> None:
@@ -294,38 +317,44 @@ def test_spatialize_chunk_predictions_missing_predictions(
         mock_fd.__iter__.return_value = iter(predictions.splitlines())
 
     # Build mock Firestore document
-    metadata: Dict[str, Any] = {
+    study_area_metadata: Dict[str, Any] = {
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
         "row_count": 2,
         "col_count": 3,
-        "chunks": {
-            "chunk-id": {
-                "row_count": 2,
-                "col_count": 3,
-                "x_ll_corner": 500,
-                "y_ll_corner": 100,
-                "x_index": 0,
-                "y_index": 0,
-            }
-        },
     }
-    mock_firestore_client().collection().document().get().to_dict.return_value = (
-        metadata
+    chunks_metadata: List[Dict[str, Any]] = [
+        {
+            "id": "chunk-id",
+            "row_count": 2,
+            "col_count": 3,
+            "x_ll_corner": 500,
+            "y_ll_corner": 100,
+            "x_index": 0,
+            "y_index": 0,
+        }
+    ]
+    mock_study_area_ref = (
+        mock_firestore_client().collection("study_areas").document("study-area-name")
     )
+    mock_study_area_ref.get().to_dict.return_value = study_area_metadata
+    mock_chunks_ref = mock_study_area_ref.collection("chunks")
+    mock_chunks_ref.get.return_value = chunks_metadata
+    mock_chunks_ref.document("chunk-id").get().to_dict.return_value = chunks_metadata[0]
 
-    with pytest.raises(ValueError) as exc_info:
-        main.subscribe(event)
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        main.spatialize_chunk_predictions(event)
 
     assert (
         "Predictions file: id/prediction-type/model-id/study-area-name/scenario-id/"
-        "chunk-id is missing." in str(exc_info.value)
+        "chunk-id is missing." in output.getvalue()
     )
 
 
-@mock.patch.object(storage, "Client", autospec=True)
-@mock.patch.object(firestore, "Client", autospec=True)
+@mock.patch.object(storage.client, "Client", autospec=True)
+@mock.patch.object(firestore_v1, "Client", autospec=True)
 def test_spatialize_chunk_predictions_too_many_predictions(
     mock_firestore_client, mock_storage_client
 ) -> None:
@@ -354,35 +383,42 @@ def test_spatialize_chunk_predictions_too_many_predictions(
         mock_fd.__iter__.return_value = predictions.splitlines()
 
     # Build mock Firestore document
-    metadata: Dict[str, Any] = {
+    study_area_metadata: Dict[str, Any] = {
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
         "row_count": 2,
         "col_count": 3,
-        "chunks": {
-            "chunk-id": {
-                "row_count": 2,
-                "col_count": 3,
-                "x_ll_corner": 500,
-                "y_ll_corner": 100,
-                "x_index": 0,
-                "y_index": 0,
-            }
-        },
     }
-    mock_firestore_client().collection().document().get().to_dict.return_value = (
-        metadata
+    chunks_metadata: List[Dict[str, Any]] = [
+        {
+            "id": "chunk-id",
+            "row_count": 2,
+            "col_count": 3,
+            "x_ll_corner": 500,
+            "y_ll_corner": 100,
+            "x_index": 0,
+            "y_index": 0,
+        }
+    ]
+    mock_study_area_ref = (
+        mock_firestore_client().collection("study_areas").document("study-area-name")
     )
+    mock_study_area_ref.get().to_dict.return_value = study_area_metadata
+    mock_chunks_ref = mock_study_area_ref.collection("chunks")
+    mock_chunks_ref.get.return_value = chunks_metadata
+    mock_chunk_ref = mock_study_area_ref.collection("chunks").document("chunk-id")
+    mock_chunk_ref.get().to_dict.return_value = chunks_metadata[0]
 
-    with pytest.raises(ValueError) as exc_info:
-        main.subscribe(event)
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        main.spatialize_chunk_predictions(event)
 
-    assert "Predictions file has too many predictions" in str(exc_info.value)
+    assert "Predictions file has too many predictions" in output.getvalue()
 
 
-@mock.patch.object(storage, "Client", autospec=True)
-@mock.patch.object(firestore, "Client", autospec=True)
+@mock.patch.object(storage.client, "Client", autospec=True)
+@mock.patch.object(firestore_v1, "Client", autospec=True)
 def test_spatialize_chunk_predictions_missing_expected_neighbor_chunk(
     mock_firestore_client, mock_storage_client
 ) -> None:
@@ -409,42 +445,45 @@ def test_spatialize_chunk_predictions_missing_expected_neighbor_chunk(
         mock_fd.__iter__.return_value = [predictions]
 
     # Build mock Firestore document
-    metadata: Dict[str, Any] = {
+    study_area_metadata: Dict[str, Any] = {
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
         "row_count": 2,
         "col_count": 3,
-        "chunks": {
-            "chunk-id": {
-                "row_count": 2,
-                "col_count": 3,
-                "x_ll_corner": 500,
-                "y_ll_corner": 100,
-                "x_index": 1,
-                "y_index": 1,
-            }
-        },
     }
-    mock_firestore_client().collection().document().get().to_dict.return_value = (
-        metadata
+    chunks_metadata: List[Dict[str, Any]] = [
+        {
+            "id": "chunk-id",
+            "row_count": 2,
+            "col_count": 3,
+            "x_ll_corner": 500,
+            "y_ll_corner": 100,
+            "x_index": 1,
+            "y_index": 1,
+        }
+    ]
+    mock_study_area_ref = (
+        mock_firestore_client().collection("study_areas").document("study-area-name")
     )
+    mock_study_area_ref.get().to_dict.return_value = study_area_metadata
+    mock_chunks_ref = mock_study_area_ref.collection("chunks")
+    mock_chunks_ref.get.return_value = chunks_metadata
+    mock_chunks_ref.document("chunk-id").get().to_dict.return_value = chunks_metadata[0]
+    mock_chunks_ref.where().where().limit().get.return_value = (
+        []
+    )  # Neighbor chunks do not exist.
 
-    # Build neighbor chunk data.
-    (
-        mock_firestore_client().collection().document().collection()
-    ).where().where().limit().get().exists = False  # Neighbor chunks do not exist.
-
-    with pytest.raises(ValueError) as exc_info:
-        main.subscribe(event)
-
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        main.spatialize_chunk_predictions(event)
     assert "Neighbor chunk at index (0, 1) is missing from the study area" in str(
-        exc_info.value
+        output.getvalue()
     )
 
 
-@mock.patch.object(storage, "Client", autospec=True)
-@mock.patch.object(firestore, "Client", autospec=True)
+@mock.patch.object(storage.client, "Client", autospec=True)
+@mock.patch.object(firestore_v1, "Client", autospec=True)
 def test_spatialize_chunk_predictions_invalid_neighbor_chunk(
     mock_firestore_client, mock_storage_client
 ) -> None:
@@ -471,49 +510,52 @@ def test_spatialize_chunk_predictions_invalid_neighbor_chunk(
         mock_fd.__iter__.return_value = [predictions]
 
     # Build mock Firestore document
-    metadata: Dict[str, Any] = {
+    study_area_metadata: Dict[str, Any] = {
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
         "row_count": 2,
         "col_count": 3,
-        "chunks": {
-            "chunk-id": {
-                "row_count": 3,
-                "col_count": 2,
-                "x_ll_corner": 500,
-                "y_ll_corner": 100,
-                "x_index": 1,
-                "y_index": 1,
-            }
-        },
     }
-    mock_firestore_client().collection().document().get().to_dict.return_value = (
-        metadata
+    chunks_metadata: List[Dict[str, Any]] = [
+        {
+            "id": "chunk-id",
+            "row_count": 3,
+            "col_count": 2,
+            "x_ll_corner": 500,
+            "y_ll_corner": 100,
+            "x_index": 1,
+            "y_index": 1,
+        }
+    ]
+    mock_study_area_ref = (
+        mock_firestore_client().collection("study_areas").document("study-area-name")
     )
+    mock_study_area_ref.get().to_dict.return_value = study_area_metadata
+    mock_chunks_ref = mock_study_area_ref.collection("chunks")
+    mock_chunks_ref.get.return_value = chunks_metadata
+    mock_chunks_ref.document("chunk-id").get().to_dict.return_value = chunks_metadata[0]
 
-    # Build neighbor chunk data.
-    neighbor_metadata = metadata["chunks"]["chunk-id"].copy()
-    (
-        mock_firestore_client().collection().document().collection().where().where()
-    ).limit().get().id = "neighbor-chunk-id"
+    neighbor_metadata_mock = mock.MagicMock()
+    neighbor_metadata_mock.id = "neighbor-chunk-id"
+    neighbor_metadata = chunks_metadata[0].copy()
     neighbor_metadata.pop("row_count")  # Missing "row_count" required field
-    (
-        mock_firestore_client().collection().document().collection().where().where()
-    ).limit().get().to_dict.return_value = neighbor_metadata
+    neighbor_metadata_mock.to_dict.return_value = neighbor_metadata
+    mock_chunks_ref.where().where().limit().get.return_value = [neighbor_metadata_mock]
 
-    with pytest.raises(ValueError) as exc_info:
-        main.subscribe(event)
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        main.spatialize_chunk_predictions(event)
 
     assert (
         "Neighbor chunk at index (0, 1) is missing one or more required fields: id,"
         " row_count, col_count, x_ll_corner,y_ll_corner, x_index, y_index"
-        in str(exc_info.value)
+        in output.getvalue()
     )
 
 
-@mock.patch.object(storage, "Client", autospec=True)
-@mock.patch.object(firestore, "Client", autospec=True)
+@mock.patch.object(storage.client, "Client", autospec=True)
+@mock.patch.object(firestore_v1, "Client", autospec=True)
 def test_spatialize_chunk_predictions_neighbor_chunk_missing_predictions(
     mock_firestore_client, mock_storage_client
 ) -> None:
@@ -542,47 +584,50 @@ def test_spatialize_chunk_predictions_neighbor_chunk_missing_predictions(
         )  # Predictions for current chunk only
 
     # Build mock Firestore document
-    metadata: Dict[str, Any] = {
+    study_area_metadata: Dict[str, Any] = {
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
         "row_count": 2,
         "col_count": 3,
-        "chunks": {
-            "chunk-id": {
-                "row_count": 3,
-                "col_count": 2,
-                "x_ll_corner": 500,
-                "y_ll_corner": 100,
-                "x_index": 1,
-                "y_index": 1,
-            }
-        },
     }
-    mock_firestore_client().collection().document().get().to_dict.return_value = (
-        metadata
+    chunks_metadata: List[Dict[str, Any]] = [
+        {
+            "id": "chunk-id",
+            "row_count": 3,
+            "col_count": 2,
+            "x_ll_corner": 500,
+            "y_ll_corner": 100,
+            "x_index": 1,
+            "y_index": 1,
+        }
+    ]
+    mock_study_area_ref = (
+        mock_firestore_client().collection("study_areas").document("study-area-name")
     )
+    mock_study_area_ref.get().to_dict.return_value = study_area_metadata
+    mock_chunks_ref = mock_study_area_ref.collection("chunks")
+    mock_chunks_ref.get.return_value = chunks_metadata
+    mock_chunks_ref.document("chunk-id").get().to_dict.return_value = chunks_metadata[0]
 
-    # Build neighbor chunk data.
-    neighbor_metadata = metadata["chunks"]["chunk-id"].copy()
-    (
-        mock_firestore_client().collection().document().collection().where().where()
-    ).limit().get().id = "neighbor-chunk-id"
-    (
-        mock_firestore_client().collection().document().collection().where().where()
-    ).limit().get().to_dict.return_value = neighbor_metadata
+    neighbor_metadata_mock = mock.MagicMock()
+    neighbor_metadata_mock.id = "neighbor-chunk-id"
+    neighbor_metadata = chunks_metadata[0].copy()
+    neighbor_metadata_mock.to_dict.return_value = neighbor_metadata
+    mock_chunks_ref.where().where().limit().get.return_value = [neighbor_metadata_mock]
 
-    with pytest.raises(ValueError) as exc_info:
-        main.subscribe(event)
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        main.spatialize_chunk_predictions(event)
 
     assert (
         "Predictions file: id/prediction-type/model-id/study-area-name/scenario-id/"
         "neighbor-chunk-id is missing."
-    ) in str(exc_info.value)
+    ) in output.getvalue()
 
 
-@mock.patch.object(storage, "Client", autospec=True)
-@mock.patch.object(firestore, "Client", autospec=True)
+@mock.patch.object(storage.client, "Client", autospec=True)
+@mock.patch.object(firestore_v1, "Client", autospec=True)
 def test_spatialize_chunk_predictions_h3_centroids_within_chunk(
     mock_firestore_client, mock_storage_client, tmp_path
 ) -> None:
@@ -631,35 +676,37 @@ def test_spatialize_chunk_predictions_h3_centroids_within_chunk(
     mock_storage_client().bucket.return_value = mock_bucket
 
     # Build mock Firestore document
-    metadata: Dict[str, Any] = {
+    study_area_metadata: Dict[str, Any] = {
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
         "row_count": 2,
         "col_count": 3,
-        "chunks": {
-            "chunk-id": {
-                "row_count": 2,
-                "col_count": 3,
-                "x_ll_corner": 500,
-                "y_ll_corner": 100,
-                "x_index": 1,
-                "y_index": 1,
-            }
-        },
     }
-    mock_firestore_client().collection().document().get().to_dict.return_value = (
-        metadata
+    chunks_metadata: List[Dict[str, Any]] = [
+        {
+            "id": "chunk-id",
+            "row_count": 2,
+            "col_count": 3,
+            "x_ll_corner": 500,
+            "y_ll_corner": 100,
+            "x_index": 1,
+            "y_index": 1,
+        }
+    ]
+    mock_study_area_ref = (
+        mock_firestore_client().collection("study_areas").document("study-area-name")
     )
+    mock_study_area_ref.get().to_dict.return_value = study_area_metadata
+    mock_chunks_ref = mock_study_area_ref.collection("chunks")
+    mock_chunks_ref.get.return_value = chunks_metadata
+    mock_chunks_ref.document("chunk-id").get().to_dict.return_value = chunks_metadata[0]
 
-    # Build neighbor chunk data.
-    neighbor_metadata = metadata["chunks"]["chunk-id"].copy()
-    (
-        mock_firestore_client().collection().document().collection().where().where()
-    ).limit().get().id = "neighbor-chunk-id"
-    (
-        mock_firestore_client().collection().document().collection().where().where()
-    ).limit().get().to_dict.return_value = neighbor_metadata
+    neighbor_metadata_mock = mock.MagicMock()
+    neighbor_metadata_mock.id = "neighbor-chunk-id"
+    neighbor_metadata = chunks_metadata[0].copy()
+    neighbor_metadata_mock.to_dict.return_value = neighbor_metadata
+    mock_chunks_ref.where().where().limit().get.return_value = [neighbor_metadata_mock]
 
     # Build expected output data (neighbor chunks have same data as current chunk in
     # this test so prediction values stay the same after aggregation.)
@@ -676,7 +723,7 @@ def test_spatialize_chunk_predictions_h3_centroids_within_chunk(
     )
     expected_series.index.name = "h3_index"
 
-    main.subscribe(event)
+    main.spatialize_chunk_predictions(event)
 
     pd.testing.assert_series_equal(
         pd.read_csv(output_file_path, index_col=0)["prediction"],
@@ -685,8 +732,8 @@ def test_spatialize_chunk_predictions_h3_centroids_within_chunk(
     )
 
 
-@mock.patch.object(storage, "Client", autospec=True)
-@mock.patch.object(firestore, "Client", autospec=True)
+@mock.patch.object(storage.client, "Client", autospec=True)
+@mock.patch.object(firestore_v1, "Client", autospec=True)
 def test_spatialize_chunk_predictions_h3_centroids_outside_chunk(
     mock_firestore_client, mock_storage_client, tmp_path
 ) -> None:
@@ -737,35 +784,37 @@ def test_spatialize_chunk_predictions_h3_centroids_outside_chunk(
     mock_storage_client().bucket.return_value = mock_bucket
 
     # Build mock Firestore document
-    metadata: Dict[str, Any] = {
+    study_area_metadata: Dict[str, Any] = {
         "name": "study_area_name",
         "cell_size": 5,
         "crs": "EPSG:32618",
         "row_count": 2,
         "col_count": 3,
-        "chunks": {
-            "chunk-id": {
-                "row_count": 4,
-                "col_count": 6,
-                "x_ll_corner": 500,
-                "y_ll_corner": 100,
-                "x_index": 1,
-                "y_index": 1,
-            }
-        },
     }
-    mock_firestore_client().collection().document().get().to_dict.return_value = (
-        metadata
+    chunks_metadata: List[Dict[str, Any]] = [
+        {
+            "id": "chunk-id",
+            "row_count": 4,
+            "col_count": 6,
+            "x_ll_corner": 500,
+            "y_ll_corner": 100,
+            "x_index": 1,
+            "y_index": 1,
+        }
+    ]
+    mock_study_area_ref = (
+        mock_firestore_client().collection("study_areas").document("study-area-name")
     )
+    mock_study_area_ref.get().to_dict.return_value = study_area_metadata
+    mock_chunks_ref = mock_study_area_ref.collection("chunks")
+    mock_chunks_ref.get.return_value = chunks_metadata
+    mock_chunks_ref.document("chunk-id").get().to_dict.return_value = chunks_metadata[0]
 
-    # Build neighbor chunk data.
-    neighbor_metadata = metadata["chunks"]["chunk-id"].copy()
-    (
-        mock_firestore_client().collection().document().collection().where().where()
-    ).limit().get().id = "neighbor-chunk-id"
-    (
-        mock_firestore_client().collection().document().collection().where().where()
-    ).limit().get().to_dict.return_value = neighbor_metadata
+    neighbor_metadata_mock = mock.MagicMock()
+    neighbor_metadata_mock.id = "neighbor-chunk-id"
+    neighbor_metadata = chunks_metadata[0].copy()
+    neighbor_metadata_mock.to_dict.return_value = neighbor_metadata
+    mock_chunks_ref.where().where().limit().get.return_value = [neighbor_metadata_mock]
 
     # Build expected output data (neighbor chunks have same data as current chunk in
     # this test so prediction values stay the same after aggregation.)
@@ -793,7 +842,7 @@ def test_spatialize_chunk_predictions_h3_centroids_outside_chunk(
     )
     expected_series.index.name = "h3_index"
 
-    main.subscribe(event)
+    main.spatialize_chunk_predictions(event)
 
     pd.testing.assert_series_equal(
         pd.read_csv(output_file_path, index_col=0)["prediction"],
@@ -802,8 +851,8 @@ def test_spatialize_chunk_predictions_h3_centroids_outside_chunk(
     )
 
 
-@mock.patch.object(storage, "Client", autospec=True)
-@mock.patch.object(firestore, "Client", autospec=True)
+@mock.patch.object(storage.client, "Client", autospec=True)
+@mock.patch.object(firestore_v1, "Client", autospec=True)
 def test_spatialize_chunk_predictions_overlapping_neighbors(
     mock_firestore_client, mock_storage_client, tmp_path
 ) -> None:
@@ -897,26 +946,31 @@ def test_spatialize_chunk_predictions_overlapping_neighbors(
     mock_storage_client().bucket.return_value = mock_bucket
 
     # Build mock Firestore document
-    metadata: Dict[str, Any] = {
+    study_area_metadata: Dict[str, Any] = {
         "name": "study_area_name",
         "cell_size": 3,
         "crs": "EPSG:32618",
         "row_count": 2,
         "col_count": 3,
-        "chunks": {
-            "chunk-id": {
-                "row_count": 5,
-                "col_count": 6,
-                "x_ll_corner": 500,
-                "y_ll_corner": 100,
-                "x_index": 1,
-                "y_index": 1,
-            }
-        },
     }
-    mock_firestore_client().collection().document().get().to_dict.return_value = (
-        metadata
+    chunks_metadata: List[Dict[str, Any]] = [
+        {
+            "id": "chunk-id",
+            "row_count": 5,
+            "col_count": 6,
+            "x_ll_corner": 500,
+            "y_ll_corner": 100,
+            "x_index": 1,
+            "y_index": 1,
+        }
+    ]
+    mock_study_area_ref = (
+        mock_firestore_client().collection("study_areas").document("study-area-name")
     )
+    mock_study_area_ref.get().to_dict.return_value = study_area_metadata
+    mock_chunks_ref = mock_study_area_ref.collection("chunks")
+    mock_chunks_ref.get.return_value = chunks_metadata
+    mock_chunks_ref.document("chunk-id").get().to_dict.return_value = chunks_metadata[0]
 
     # Build neighbor chunk data.
     neighbor_left = {
@@ -959,32 +1013,43 @@ def test_spatialize_chunk_predictions_overlapping_neighbors(
         "x_index": 1,
         "y_index": 0,
     }
-    type(
-        mock_firestore_client()
-        .collection()
-        .document()
-        .collection()
-        .where()
-        .where()
-        .limit()
-        .get()
-    ).id = mock.PropertyMock(
-        side_effect=[
-            "neighbor-chunk-left",
-            "neighbor-chunk-right",
-            "neighbor-chunk-bottom-left",
-            "neighbor-chunk-bottom-right",
-            "neighbor-chunk-bottom",
-        ]
-    )
     (
         mock_firestore_client().collection().document().collection().where().where()
-    ).limit().get().to_dict.side_effect = [
-        neighbor_left,
-        neighbor_right,
-        neighbor_bottom_left,
-        neighbor_bottom_right,
-        neighbor_bottom,
+    ).limit().get.side_effect = [
+        [
+            mock.MagicMock(
+                **{"id": "neighbor-chunk-left", "to_dict.return_value": neighbor_left}
+            )
+        ],
+        [
+            mock.MagicMock(
+                **{"id": "neighbor-chunk-right", "to_dict.return_value": neighbor_right}
+            )
+        ],
+        [
+            mock.MagicMock(
+                **{
+                    "id": "neighbor-chunk-bottom-left",
+                    "to_dict.return_value": neighbor_bottom_left,
+                }
+            )
+        ],
+        [
+            mock.MagicMock(
+                **{
+                    "id": "neighbor-chunk-bottom-right",
+                    "to_dict.return_value": neighbor_bottom_right,
+                }
+            )
+        ],
+        [
+            mock.MagicMock(
+                **{
+                    "id": "neighbor-chunk-bottom",
+                    "to_dict.return_value": neighbor_bottom,
+                }
+            )
+        ],
     ]
 
     # Build expected output data
@@ -1003,7 +1068,7 @@ def test_spatialize_chunk_predictions_overlapping_neighbors(
     )
     expected_series.index.name = "h3_index"
 
-    main.subscribe(event)
+    main.spatialize_chunk_predictions(event)
 
     pd.testing.assert_series_equal(
         pd.read_csv(output_file_path, index_col=0)["prediction"],
