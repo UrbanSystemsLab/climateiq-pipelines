@@ -31,7 +31,7 @@ def export_to_aws(request: flask.Request) -> tuple[str, int]:
     if not len(blobs_to_export):
         return (f"No blobs found with prefix {prefix}", 400)
 
-    output_file_dir = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
+    curr_time_str = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
 
     aws_access_key_id = os.environ.get(AWS_ACCESS_KEY_ID)
     aws_secret_access_key = os.environ.get(AWS_SECRET_ACCESS_KEY)
@@ -44,8 +44,10 @@ def export_to_aws(request: flask.Request) -> tuple[str, int]:
     for blob in blobs_to_export:
         with blob.open("rb") as fd:
             s3_client.upload_fileobj(
-                fd, S3_BUCKET_NAME, f"{output_file_dir}/{blob.name}"
+                fd, S3_BUCKET_NAME, f"{curr_time_str}/{blob.name}"
             )
+            blob.metadata = {'export_time' : curr_time_str}
+            blob.patch(metadata=blob.metadata)
     return ("Success", 200)
 
 
