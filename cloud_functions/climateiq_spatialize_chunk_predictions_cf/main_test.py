@@ -822,20 +822,20 @@ def test_spatialize_chunk_predictions_h3_centroids_outside_chunk(
         {
             "8d8f2c80c1582bf": 6.0,
             "8d8f2c80c15863f": 3.0,
-            "8d8f2c80c15867f": 7.5,
+            "8d8f2c80c15867f": 11,
             "8d8f2c80c1586bf": 2.0,
             "8d8f2c80c1586ff": 9.0,
-            "8d8f2c80c15b83f": 23.5,  # Average of prediction values
+            "8d8f2c80c15b83f": 24.0,  # Max of prediction values
             # 23, 24 (from current chunk)
-            "8d8f2c80c15b93f": 15.0,  # Average of prediction values
+            "8d8f2c80c15b93f": 18.0,  # Max of prediction values
             # 12, 18 (from current chunk)
-            "8d8f2c80c15b9bf": 16.5,  # Average of prediction values
+            "8d8f2c80c15b9bf": 17.0,  # Max of prediction values
             # 16, 17 (from current chunk)
-            "8d8f2c80c15bc3f": 19.5,  # Average of prediction values
+            "8d8f2c80c15bc3f": 20.0,  # Max of prediction values
             # 19, 20 (from current chunk)
-            "8d8f2c80c15bd3f": 11.0,  # Average of prediction values
+            "8d8f2c80c15bd3f": 14.0,  # Max of prediction values
             # 8, 14 (from current chunk)
-            "8d8f2c80c15bd7f": 18.0,  # Average of prediction values
+            "8d8f2c80c15bd7f": 21.0,  # Max of prediction values
             # 15, 21 (from current chunk)
         },
         name="prediction",
@@ -1055,13 +1055,13 @@ def test_spatialize_chunk_predictions_overlapping_neighbors(
     # Build expected output data
     expected_series = pd.Series(
         {
-            "8d8f2c80c1586ff": 8.0,  # Average of prediction values 10, 11, 12,
+            "8d8f2c80c1586ff": 12.0,  # Max of prediction values 10, 11, 12,
             # 4, 5, 6 (from current chunk)
-            "8d8f2c80c15bc3f": 26.2857142857,  # Average of prediction values 25, 26,
+            "8d8f2c80c15bc3f": 33.0,  # Max of prediction values 25, 26,
             # 27, 20, 21, (from current chunk) and 32, 33 (from bottom neighbor chunk)
-            "8d8f2c80c15bd3f": 11.5,  # Average of prediction values  14, 15, 8,
+            "8d8f2c80c15bd3f": 15.0,  # Max of prediction values  14, 15, 8,
             # 9 (from current chunk)
-            "8d8f2c80c15bd7f": 22.714285714,  # Average of prediction values 28, 29,
+            "8d8f2c80c15bd7f": 29,  # Max of prediction values 28, 29,
             # 22, 23, 24, 16, 17 (from current chunk)
         },
         name="prediction",

@@ -353,7 +353,7 @@ def _calculate_h3_indexes(
     """Projects cell centroids to H3 indexes.
 
     Filters out cells that have projected H3 centroids outside of the current
-    chunk and de-dupes duplicate H3 projections by using the average prediction
+    chunk and de-dupes duplicate H3 projections by using the max prediction
     value from overlapping cells.
 
     Args:
@@ -447,7 +447,7 @@ def _aggregate_h3_predictions(
     if boundary_h3_cells.size == 0:
         spatialized_predictions = spatialized_predictions.groupby(
             ["h3_index"]
-        ).prediction.agg("mean")
+        ).prediction.agg("max")
         return spatialized_predictions
 
     x = chunk_metadata["x_index"]
@@ -545,5 +545,5 @@ def _aggregate_h3_predictions(
 
     spatialized_predictions = spatialized_predictions.groupby(
         ["h3_index"]
-    ).prediction.agg("mean")
+    ).prediction.agg("max")
     return spatialized_predictions
