@@ -52,7 +52,7 @@ def export_to_aws(request: flask.Request) -> tuple[str, int]:
 
 
 def _get_prefix_id(request: flask.Request) -> str:
-    prefix = request.args.get("prefix")
-    if not prefix:
-        raise ValueError("No prefix provided in request parameters.")
-    return prefix
+    req_json = request.get_json(silent=True)
+    if req_json is None or "prefix" not in req_json:
+        raise ValueError("No prefix provided in request.")
+    return req_json["prefix"]
