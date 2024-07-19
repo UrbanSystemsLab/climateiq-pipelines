@@ -29,7 +29,7 @@ def export_to_aws(request: flask.Request) -> tuple[str, int]:
     blobs_to_export = list(storage_client.list_blobs(GCS_BUCKET_NAME, prefix=prefix))
 
     if not len(blobs_to_export):
-        return (f"No blobs found with prefix {prefix}", 400)
+        return (f"No blobs found with prefix {prefix}\n", 400)
 
     curr_time_str = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
 
@@ -47,12 +47,12 @@ def export_to_aws(request: flask.Request) -> tuple[str, int]:
                 fd, S3_BUCKET_NAME, f"{curr_time_str}/{blob.name}"
             )
             blob.metadata = {'export_time' : curr_time_str}
-            blob.patch(metadata=blob.metadata)
-    return ("Success", 200)
+            blob.patch()
+    return (f"Successfully exported {len(blobs_to_export)} CSV files to ClimaSens.\n", 200)
 
 
 def _get_prefix_id(request: flask.Request) -> str:
     req_json = request.get_json(silent=True)
     if req_json is None or "prefix" not in req_json:
-        raise ValueError("No prefix provided in request.")
+        raise ValueError("No prefix provided in request.\n")
     return req_json["prefix"]
