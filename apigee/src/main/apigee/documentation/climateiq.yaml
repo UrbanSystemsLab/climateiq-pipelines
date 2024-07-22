@@ -1,14 +1,28 @@
 openapi: 3.0.0
 info:
   title: ClimateIQ Hazard Data
+  description: |-
+    ClimateIQ identifies hyperlocal hot spots for extreme heat and stormwater flooding, enabling city planners and communities to prepare for future threats.
+    Our API provides access to hazard data for our partner locations.  
+    
+    Useful links:
+    - [Administrative Boundaries](https://climate-iq.notion.site/Available-Areas-46e9c3918de948c8987a3c648595f302)
+    - [ClimateIQ Dashboard](https://dashboard.climateiq.org)
+    - [Flood Methodology](https://climate-iq.notion.site/Flood-Methodology-3fcc69ae015e4d9abe7b3a692ba19820)
+    - [Heat Methodology](https://climate-iq.notion.site/Heat-Methodology-e3b16df45c0c48a4b775756b9b8e6f15)
+  
   version: 1.0.0
+  termsOfService: https://auth.climateiq.org/terms-of-service
+externalDocs:
+  description: Find out more about ClimateIQ
+  url: https://climateiq.org  
 servers:
-  - url: https://34.49.55.140.nip.io/data/
+  - url: https://api.climateiq.org/data/
 
 paths:
   /hazard/point:
     get:
-      summary: Get hazard data for a specific point (latitude/longitude).
+      summary: Get hazard data for a specific geographic point (latitude/longitude).
       parameters:
         - name: lat
           in: query
@@ -26,13 +40,68 @@ paths:
             format: float
       responses:
         '200':
-          description: Successful response containing hazard data for the point.
-
-  /hazard/polygon:
+          description: Successful response containing hazard data for the point identified by the highest resolution h3 cell code.  Returns empty array if no data is found.
+          content:
+            application/json: 
+              examples:
+                lat=40.749714&lng=-73.993454:
+                  value:
+                    {
+                      "properties": {
+                        "cell_code": "8d2a100d2c85bbf",
+                        "flood_depth_1y": 0,
+                        "flood_depth_5y": 0,
+                        "flood_depth_10y": 0,
+                        "flood_depth_25y": 0.01,
+                        "flood_depth_50y": 0.02,
+                        "flood_depth_100y": 0.04,
+                        "flood_depth_200y": 0.06,
+                        "flood_depth_500y": 0.12,
+                        "flood_depth_1000y": 0.3,
+                        "heat_days_temp_25c_50p": 4,
+                        "heat_days_temp_25c_75p": 3,
+                        "heat_days_temp_25c_99p": 9,
+                        "heat_days_temp_30c_50p": 2,
+                        "heat_days_temp_30c_75p": 8,
+                        "heat_days_temp_30c_99p": 4,
+                        "heat_days_temp_35c_50p": 10,
+                        "heat_days_temp_35c_75p": 6,
+                        "heat_days_temp_35c_99p": 8,
+                        "heat_days_temp_40c_50p": 3,
+                        "heat_days_temp_40c_75p": 6,
+                        "heat_days_temp_40c_99p": 4,
+                        "heat_days_index_30c_50p": 9,
+                        "heat_days_index_30c_75p": 3,
+                        "heat_days_index_30c_99p": 6,
+                        "heat_days_index_35c_50p": 3,
+                        "heat_days_index_35c_75p": 8,
+                        "heat_days_index_35c_99p": 4,
+                        "heat_days_index_40c_50p": 9,
+                        "heat_days_index_40c_75p": 4,
+                        "heat_days_index_40c_99p": 7,
+                        "heat_days_index_45c_50p": 5,
+                        "heat_days_index_45c_75p": 8,
+                        "heat_days_index_45c_99p": 6,
+                        "heat_days_humidity_30_50p": 8,
+                        "heat_days_humidity_30_75p": 6,
+                        "heat_days_humidity_30_99p": 7,
+                        "heat_days_humidity_50_50p": 4,
+                        "heat_days_humidity_50_75p": 8,
+                        "heat_days_humidity_50_99p": 2,
+                        "heat_days_humidity_70_50p": 9,
+                        "heat_days_humidity_70_75p": 4,
+                        "heat_days_humidity_70_99p": 10,
+                        "heat_days_humidity_90_50p": 4,
+                        "heat_days_humidity_90_75p": 7,
+                        "heat_days_humidity_90_99p": 6
+                      }
+                    }
+        '400':
+          description: Failure response if points are malformed.
     post:
-      summary: Get hazard data for a polygon defined by an array of points.
+      summary: Get hazard data for a set of geographic points.
       requestBody:
-        description: Array of points (latitude/longitude pairs) defining the polygon.
+        description: Array of points (latitude/longitude pairs in an array)
         required: true
         content:
           application/json:
@@ -45,9 +114,125 @@ paths:
                   format: float
                 minItems: 2
                 maxItems: 2
+            examples:
+                2 points:
+                  value:
+                    [
+                        [
+                            40.7481896,
+                            -73.9828662
+                        ],
+                        [
+                            40.8152159,
+                            -73.8892703
+                        ]
+                    ]
       responses:
         '200':
-          description: Successful response containing hazard data for the polygon.
+          description: Successful response with an array containing hazard data for the points in the array.
+        '400':
+          description: Failure response if points array is malformed.
+
+  /hazard/polygon:
+    post:
+      summary: Get aggregated hazard data for a polygon defined by an array of points.
+      requestBody:
+        description: Array of points (latitude/longitude pairs) defining the polygon.(first and last points should be the same)
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: array
+                items:
+                  type: number
+                  format: float
+                minItems: 2
+                maxItems: 2
+            examples:
+                Manhattan Triangle:
+                  value:
+                    [
+                          [
+                            -73.9444202,
+                            40.7799443
+                          ],
+                          [
+                            -73.9445114,
+                            40.7827877
+                          ],
+                          [
+                            -73.9464104,
+                            40.7807527
+                          ],
+                          [
+                            -73.9444202,
+                            40.7799443
+                          ]
+                        ]
+    
+      responses:
+        '200':
+          description: Successful response containing hazard data for the polygon.  Data is aggregated for each hazard.
+          content:
+            application/json: 
+              examples:
+                Manhattan Triangle:
+                  value:
+                    {
+                      "properties": {
+                        "cell_code": "8d2a100d2c85bbf",
+                        "flood_depth_1y": 0,
+                        "flood_depth_5y": 0,
+                        "flood_depth_10y": 0,
+                        "flood_depth_25y": 0.01,
+                        "flood_depth_50y": 0.02,
+                        "flood_depth_100y": 0.04,
+                        "flood_depth_200y": 0.06,
+                        "flood_depth_500y": 0.12,
+                        "flood_depth_1000y": 0.3,
+                        "heat_days_temp_25c_50p": 4,
+                        "heat_days_temp_25c_75p": 3,
+                        "heat_days_temp_25c_99p": 9,
+                        "heat_days_temp_30c_50p": 2,
+                        "heat_days_temp_30c_75p": 8,
+                        "heat_days_temp_30c_99p": 4,
+                        "heat_days_temp_35c_50p": 10,
+                        "heat_days_temp_35c_75p": 6,
+                        "heat_days_temp_35c_99p": 8,
+                        "heat_days_temp_40c_50p": 3,
+                        "heat_days_temp_40c_75p": 6,
+                        "heat_days_temp_40c_99p": 4,
+                        "heat_days_index_30c_50p": 9,
+                        "heat_days_index_30c_75p": 3,
+                        "heat_days_index_30c_99p": 6,
+                        "heat_days_index_35c_50p": 3,
+                        "heat_days_index_35c_75p": 8,
+                        "heat_days_index_35c_99p": 4,
+                        "heat_days_index_40c_50p": 9,
+                        "heat_days_index_40c_75p": 4,
+                        "heat_days_index_40c_99p": 7,
+                        "heat_days_index_45c_50p": 5,
+                        "heat_days_index_45c_75p": 8,
+                        "heat_days_index_45c_99p": 6,
+                        "heat_days_humidity_30_50p": 8,
+                        "heat_days_humidity_30_75p": 6,
+                        "heat_days_humidity_30_99p": 7,
+                        "heat_days_humidity_50_50p": 4,
+                        "heat_days_humidity_50_75p": 8,
+                        "heat_days_humidity_50_99p": 2,
+                        "heat_days_humidity_70_50p": 9,
+                        "heat_days_humidity_70_75p": 4,
+                        "heat_days_humidity_70_99p": 10,
+                        "heat_days_humidity_90_50p": 4,
+                        "heat_days_humidity_90_75p": 7,
+                        "heat_days_humidity_90_99p": 6
+                      }
+                    }
+                  
+        '400':
+          description: Failure response containing hazard data for the polygon.  Data is aggregated for each hazard.
 
   /hazard/admin_boundary:
     get:
@@ -55,23 +240,77 @@ paths:
       parameters:
         - name: admin_level
           in: query
-          description: Administrative level (e.g., country, state, county).
+          description: |-
+            The administrative level of the boundary of interest.  Administrative levels are documented [here](https://climate-iq.notion.site/Available-Areas-46e9c3918de948c8987a3c648595f302)
           required: true
           schema:
             type: string
         - name: boundary_id
           in: query
-          description: Unique identifier for the boundary.
+          description: |-
+            Unique identifier for the boundary.  Boundary identifiers are found [here](https://climate-iq.notion.site/Available-Areas-46e9c3918de948c8987a3c648595f302)
+            
           required: true
-          schema:
-            type: string
-        - name: hazard_category
-          in: query
-          description: Category of hazard data (optional).
           schema:
             type: string
       responses:
         '200':
           description: Successful response containing hazard data for the boundary.
-
-  
+          content:
+            application/json: 
+              examples:
+                admin_level=10&boundary_id=BK0102:
+                  value:
+                    {
+                      "properties": {
+                        "osm_id": "BK0102",
+                        "flood_depth_1y": 0,
+                        "flood_depth_5y": 0.01,
+                        "flood_depth_10y": 0.02,
+                        "flood_depth_25y": 0.03,
+                        "flood_depth_50y": 0.07,
+                        "flood_depth_100y": 0.14,
+                        "flood_depth_200y": 0.27,
+                        "flood_depth_500y": 0.55,
+                        "flood_depth_1000y": 1.1,
+                        "heat_days_temp_25c_50p": 2,
+                        "heat_days_temp_25c_75p": 5,
+                        "heat_days_temp_25c_99p": 10,
+                        "heat_days_temp_30c_50p": 5,
+                        "heat_days_temp_30c_75p": 10,
+                        "heat_days_temp_30c_99p": 5,
+                        "heat_days_temp_35c_50p": 10,
+                        "heat_days_temp_35c_75p": 5,
+                        "heat_days_temp_35c_99p": 10,
+                        "heat_days_temp_40c_50p": 5,
+                        "heat_days_temp_40c_75p": 10,
+                        "heat_days_temp_40c_99p": 5,
+                        "heat_days_index_30c_50p": 10,
+                        "heat_days_index_30c_75p": 5,
+                        "heat_days_index_30c_99p": 10,
+                        "heat_days_index_35c_50p": 5,
+                        "heat_days_index_35c_75p": 10,
+                        "heat_days_index_35c_99p": 5,
+                        "heat_days_index_40c_50p": 10,
+                        "heat_days_index_40c_75p": 5,
+                        "heat_days_index_40c_99p": 10,
+                        "heat_days_index_45c_50p": 5,
+                        "heat_days_index_45c_75p": 10,
+                        "heat_days_index_45c_99p": 5,
+                        "heat_days_humidity_30_50p": 10,
+                        "heat_days_humidity_30_75p": 5,
+                        "heat_days_humidity_30_99p": 10,
+                        "heat_days_humidity_50_50p": 5,
+                        "heat_days_humidity_50_75p": 10,
+                        "heat_days_humidity_50_99p": 5,
+                        "heat_days_humidity_70_50p": 10,
+                        "heat_days_humidity_70_75p": 5,
+                        "heat_days_humidity_70_99p": 10,
+                        "heat_days_humidity_90_50p": 5,
+                        "heat_days_humidity_90_75p": 10,
+                        "heat_days_humidity_90_99p": 5
+                      }
+                    }
+        '400':
+          description: Error due to invalid input parameters.
+                      
