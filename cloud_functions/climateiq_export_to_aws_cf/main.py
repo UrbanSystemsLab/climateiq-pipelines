@@ -11,7 +11,11 @@ GCS_BUCKET_NAME = (
     os.environ.get("BUCKET_PREFIX", "") + "climateiq-spatialized-merged-predictions"
 )
 # AWS bucket name, where to copy files to.
-S3_BUCKET_NAME = "climateiq-data-delivery"
+S3_BUCKET_NAME = (
+    "climateiq-data-delivery-dev"
+    if os.environ.get("BUCKET_PREFIX", "").startswith("test")
+    else "climateiq-data-delivery"
+)
 
 # IDs for retrieving secrets to authenticate to AWS
 AWS_ACCESS_KEY_ID = "climasens-aws-access-key-id"
@@ -43,12 +47,14 @@ def export_to_aws(request: flask.Request) -> tuple[str, int]:
     )
     for blob in blobs_to_export:
         with blob.open("rb") as fd:
-            s3_client.upload_fileobj(
-                fd, S3_BUCKET_NAME, f"{curr_time_str}/{blob.name}"
-            )
-            blob.metadata = {'export_time' : curr_time_str}
+            s3_client.upload_fileobj(fd, S3_BUCKET_NAME, f"{curr_time_str}/{blob.name}")
+            blob.metadata = {"export_time": curr_time_str}
             blob.patch()
-    return (f"Successfully exported {len(blobs_to_export)} CSV files to ClimaSens.\n", 200)
+    return (
+        f"Successfully exported {len(blobs_to_export)} CSV files to AWS bucket: "
+        f"{S3_BUCKET_NAME}.\n",
+        200,
+    )
 
 
 def _get_prefix_id(request: flask.Request) -> str:
