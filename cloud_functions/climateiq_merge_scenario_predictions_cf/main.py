@@ -25,7 +25,7 @@ CHUNK_FILE_NAME_PATTERN = (
 # ID for the Study Areas collection in Firestore.
 STUDY_AREAS_COLLECTION_ID = "study_areas"
 # ID for the Model collection in Firestore.
-MODEL_COLLECTION_ID = "Model"
+MODEL_COLLECTION_ID = "models"
 # ID for the Runs sub-collection in Firestore.
 RUNS_COLLECTION_ID = "runs"
 
