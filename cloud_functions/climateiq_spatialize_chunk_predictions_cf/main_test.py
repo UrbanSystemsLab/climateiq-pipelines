@@ -137,8 +137,8 @@ def test_spatialize_chunk_predictions_invalid_study_area(
     study_area_metadata: Dict[str, Any] = {
         "name": "study_area_name",
         "crs": "EPSG:32618",
-        "row_count": 2,
-        "col_count": 3,
+        "chunk_y_count": 2,
+        "chunk_x_count": 3,
     }  # Missing "cell_size" required field
     chunks_metadata: List[Dict[str, Any]] = [
         {
@@ -164,7 +164,7 @@ def test_spatialize_chunk_predictions_invalid_study_area(
 
     assert (
         'Study area "study-area-name" is missing one or more required '
-        "fields: cell_size, crs, row_count, col_count" in output.getvalue()
+        "fields: cell_size, crs, chunk_x_count, chunk_y_count" in output.getvalue()
     )
 
 
@@ -200,8 +200,8 @@ def test_spatialize_chunk_predictions_missing_chunk(
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
-        "row_count": 2,
-        "col_count": 3,
+        "chunk_y_count": 2,
+        "chunk_x_count": 3,
     }
     chunks_metadata: List[Dict[str, Any]] = [
         {
@@ -261,8 +261,8 @@ def test_spatialize_chunk_predictions_invalid_chunk(
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
-        "row_count": 2,
-        "col_count": 3,
+        "chunk_y_count": 2,
+        "chunk_x_count": 3,
     }
     chunks_metadata: List[Dict[str, Any]] = [
         {
@@ -321,8 +321,8 @@ def test_spatialize_chunk_predictions_missing_predictions(
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
-        "row_count": 2,
-        "col_count": 3,
+        "chunk_y_count": 2,
+        "chunk_x_count": 3,
     }
     chunks_metadata: List[Dict[str, Any]] = [
         {
@@ -387,8 +387,8 @@ def test_spatialize_chunk_predictions_too_many_predictions(
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
-        "row_count": 2,
-        "col_count": 3,
+        "chunk_y_count": 2,
+        "chunk_x_count": 3,
     }
     chunks_metadata: List[Dict[str, Any]] = [
         {
@@ -449,8 +449,8 @@ def test_spatialize_chunk_predictions_missing_expected_neighbor_chunk(
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
-        "row_count": 2,
-        "col_count": 3,
+        "chunk_y_count": 2,
+        "chunk_x_count": 3,
     }
     chunks_metadata: List[Dict[str, Any]] = [
         {
@@ -514,8 +514,8 @@ def test_spatialize_chunk_predictions_invalid_neighbor_chunk(
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
-        "row_count": 2,
-        "col_count": 3,
+        "chunk_y_count": 2,
+        "chunk_x_count": 3,
     }
     chunks_metadata: List[Dict[str, Any]] = [
         {
@@ -588,8 +588,8 @@ def test_spatialize_chunk_predictions_neighbor_chunk_missing_predictions(
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
-        "row_count": 2,
-        "col_count": 3,
+        "chunk_y_count": 2,
+        "chunk_x_count": 3,
     }
     chunks_metadata: List[Dict[str, Any]] = [
         {
@@ -680,8 +680,8 @@ def test_spatialize_chunk_predictions_h3_centroids_within_chunk(
         "name": "study_area_name",
         "cell_size": 10,
         "crs": "EPSG:32618",
-        "row_count": 2,
-        "col_count": 3,
+        "chunk_y_count": 2,
+        "chunk_x_count": 3,
     }
     chunks_metadata: List[Dict[str, Any]] = [
         {
@@ -788,8 +788,8 @@ def test_spatialize_chunk_predictions_h3_centroids_outside_chunk(
         "name": "study_area_name",
         "cell_size": 5,
         "crs": "EPSG:32618",
-        "row_count": 2,
-        "col_count": 3,
+        "chunk_y_count": 2,
+        "chunk_x_count": 3,
     }
     chunks_metadata: List[Dict[str, Any]] = [
         {
@@ -950,8 +950,8 @@ def test_spatialize_chunk_predictions_overlapping_neighbors(
         "name": "study_area_name",
         "cell_size": 3,
         "crs": "EPSG:32618",
-        "row_count": 2,
-        "col_count": 3,
+        "chunk_y_count": 2,
+        "chunk_x_count": 3,
     }
     chunks_metadata: List[Dict[str, Any]] = [
         {
