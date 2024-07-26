@@ -1,13 +1,14 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<APIProxy revision="5" name="data">
+<APIProxy revision="14" name="data">
   <DisplayName/>
   <Description/>
-  <CreatedAt>1718735448477</CreatedAt>
-  <LastModifiedAt>1718735527906</LastModifiedAt>
+  <CreatedAt>1721424074751</CreatedAt>
+  <LastModifiedAt>1721424074751</LastModifiedAt>
   <BasePaths>/data</BasePaths>
   <Policies>
     <Policy>FC-CORS</Policy>
     <Policy>SA-RateLimit</Policy>
+    <Policy>FC-Add-Secret-to-Header</Policy>
   </Policies>
   <ProxyEndpoints>
     <ProxyEndpoint>default</ProxyEndpoint>

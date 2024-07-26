@@ -2,6 +2,6 @@
 <TargetEndpoint name="default">
   <HTTPTargetConnection>
     <Properties/>
-    <URL>http://dashboard.climateiq.org/internal/user/</URL>
+    <URL>https://climateiq-service.climasens.com/user/</URL>
   </HTTPTargetConnection>
 </TargetEndpoint>

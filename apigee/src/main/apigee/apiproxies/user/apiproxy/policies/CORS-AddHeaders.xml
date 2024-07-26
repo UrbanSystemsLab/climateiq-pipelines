@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- override
+<FlowCallout async="false" continueOnError="false" enabled="true" name="FC-CORS">
+<SharedFlowBundle>cors</SharedFlowBundle>
+</FlowCallout>-->
+<CORS async="false" continueOnError="false" enabled="true" name="CORS-AddHeaders">
+  <AllowOrigins>https://auth.climateiq.org</AllowOrigins>
+  <AllowMethods>POST, DELETE</AllowMethods>
+  <AllowHeaders>origin, x-requested-with, accept, content-type, authorization</AllowHeaders>
+  <ExposeHeaders>*</ExposeHeaders>
+  <AllowCredentials>true</AllowCredentials>
+  <GeneratePreflightResponse>true</GeneratePreflightResponse>
+</CORS>

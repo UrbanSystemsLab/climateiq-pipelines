@@ -3,30 +3,33 @@
   <PreFlow name="PreFlow">
     <Request>
       <Step>
-        <Name>FC-CORS</Name>
+        <Name>CORS-AddHeaders</Name>
       </Step>
-      <Step>
-        <Name>SA-RateLimit</Name>
-      </Step>
-      <Step>
-        <Name>FC-Authentication</Name>
-      </Step>
-    </Request>
-  </PreFlow>
-  <PostFlow name="PostFlow">
-    <Request>
-      <Step>
-        <Name>AM-UserIdHeader</Name>
-        <Condition>accesstoken.climateiq_user_id != null</Condition>
-      </Step>
-    </Request>
-  </PostFlow>
-  <HTTPProxyConnection>
-    <BasePath>/user</BasePath>
-    <!-- Listen only on the HTTPS endpoint -->
-    <VirtualHost>secure</VirtualHost>
-  </HTTPProxyConnection>
-  <RouteRule name="default">
-    <TargetEndpoint>default</TargetEndpoint>
-  </RouteRule>
+      <!-- <Step>
+      <Name>SA-RateLimit</Name>
+    </Step> -->
+    <Step>
+      <Name>FC-Authentication</Name>
+    </Step>
+  </Request>
+</PreFlow>
+<PostFlow name="PostFlow">
+  <Request>
+    <Step>
+      <Name>AM-UserIdHeader</Name>
+      <Condition>accesstoken.climateiq_user_id != null</Condition>
+    </Step>
+    <Step>
+      <Name>FC-Add-Secret-to-Header</Name>
+    </Step>
+  </Request>
+</PostFlow>
+<HTTPProxyConnection>
+  <BasePath>/user</BasePath>
+  <!-- Listen only on the HTTPS endpoint -->
+  <VirtualHost>secure</VirtualHost>
+</HTTPProxyConnection>
+<RouteRule name="default">
+  <TargetEndpoint>default</TargetEndpoint>
+</RouteRule>
 </ProxyEndpoint>

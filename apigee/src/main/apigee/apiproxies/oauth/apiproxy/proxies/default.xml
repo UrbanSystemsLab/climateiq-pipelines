@@ -5,37 +5,37 @@
       <Step>
         <Name>FC-CORS</Name>
       </Step>
+      <!-- <Step>
+      <Name>SA-RateLimit</Name>
+    </Step> -->
+    <Step>
+      <Name>RF-InvalidGrantType</Name>
+      <Condition>request.formparam.grant_type != "urn:ietf:params:oauth:grant-type:jwt-bearer"</Condition>
+    </Step>
+  </Request>
+</PreFlow>
+<Flows>
+  <Flow name="default">
+    <Request>
       <Step>
-        <Name>SA-RateLimit</Name>
+        <Name>AM-OAuthV2GrantType</Name>
       </Step>
       <Step>
-        <Name>RF-InvalidGrantType</Name>
-        <Condition>request.formparam.grant_type != "urn:ietf:params:oauth:grant-type:jwt-bearer"</Condition>
+        <Name>VerifyJWT-FirebaseIDToken</Name>
+      </Step>
+      <Step>
+        <Name>JS-CalculateAccessTokenExpirationTime</Name>
+      </Step>
+      <Step>
+        <Name>OAuthV2-GenerateAccessToken</Name>
       </Step>
     </Request>
-  </PreFlow>
-  <Flows>
-    <Flow name="default">
-      <Request>
-        <Step>
-          <Name>AM-OAuthV2GrantType</Name>
-        </Step>
-        <Step>
-          <Name>VerifyJWT-FirebaseIDToken</Name>
-        </Step>
-        <Step>
-          <Name>JS-CalculateAccessTokenExpirationTime</Name>
-        </Step>
-        <Step>
-          <Name>OAuthV2-GenerateAccessToken</Name>
-        </Step>
-      </Request>
-    </Flow>
-  </Flows>
-  <HTTPProxyConnection>
-    <BasePath>/oauth/token</BasePath>
-    <!-- Listen only on the HTTPS endpoint -->
-    <VirtualHost>secure</VirtualHost>
-  </HTTPProxyConnection>
-  <RouteRule name="NoRoute"/>
+  </Flow>
+</Flows>
+<HTTPProxyConnection>
+  <BasePath>/oauth/token</BasePath>
+  <!-- Listen only on the HTTPS endpoint -->
+  <VirtualHost>secure</VirtualHost>
+</HTTPProxyConnection>
+<RouteRule name="NoRoute"/>
 </ProxyEndpoint>

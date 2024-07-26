@@ -5,18 +5,21 @@
       <Step>
         <Name>FC-CORS</Name>
       </Step>
-      <Step>
-        <Name>SA-RateLimit</Name>
-      </Step>
-    </Request>
-  </PreFlow>
-  <Flows/>
-  <HTTPProxyConnection>
-    <BasePath>/data</BasePath>
-    <!-- Listen only on the HTTPS endpoint -->
-    <VirtualHost>secure</VirtualHost>
-  </HTTPProxyConnection>
-  <RouteRule name="default">
-    <TargetEndpoint>default</TargetEndpoint>
-  </RouteRule>
+      <!-- <Step>
+      <Name>SA-RateLimit</Name>
+    </Step> -->
+    <Step>
+      <Name>FC-Add-Secret-to-Header</Name>
+    </Step>
+  </Request>
+</PreFlow>
+<Flows/>
+<HTTPProxyConnection>
+  <BasePath>/data</BasePath>
+  <!-- Listen only on the HTTPS endpoint -->
+  <VirtualHost>secure</VirtualHost>
+</HTTPProxyConnection>
+<RouteRule name="default">
+  <TargetEndpoint>default</TargetEndpoint>
+</RouteRule>
 </ProxyEndpoint>
