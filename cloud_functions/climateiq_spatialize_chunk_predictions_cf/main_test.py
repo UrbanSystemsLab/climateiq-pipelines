@@ -1,16 +1,20 @@
-import base64
+import json
 import tempfile
-import io
-import contextlib
-import pandas as pd
 
-from cloudevents import http
-from google.cloud import firestore_v1
-from google.cloud import storage
+import flask
+from google.cloud import firestore_v1, storage
+import pandas as pd
+import pytest
 from typing import Any, Dict, List
 from unittest import mock
 
 import main
+
+
+def _create_request_context(object_name: str) -> flask.ctx.RequestContext:
+    return flask.Flask(__name__).test_request_context(
+        data=json.dumps({"object_name": object_name}), content_type="application/json"
+    )
 
 
 def _create_tmpfile(contents: str, dir: str) -> str:
@@ -43,27 +47,16 @@ def _create_mock_bucket(tmp_files: dict[str, str]) -> mock.MagicMock:
 
 
 def test_spatialize_chunk_predictions_invalid_object_name() -> None:
-    event = http.CloudEvent(
-        {
-            "type": "google.cloud.pubsub.topic.v1.messagePublished",
-            "source": "source",
-        },
-        {
-            "message": {
-                "data": base64.b64encode(b"invalid_name"),
-            }
-        },
-    )
-
-    output = io.StringIO()
-    with contextlib.redirect_stdout(output):
-        main.spatialize_chunk_predictions(event)
-
-    assert (
-        "Invalid object name format. Expected format: '<id>/<prediction_type>/"
-        "<model_id>/<study_area_name>/<scenario_id>/<chunk_id>'"
-        "\nActual name: 'invalid_name'" in output.getvalue()
-    )
+    with _create_request_context("invalid_name"):
+        with pytest.raises(
+            ValueError,
+            match=(
+                "Invalid object name format. Expected format: '<id>/<prediction_type>/"
+                "<model_id>/<study_area_name>/<scenario_id>/<chunk_id>'"
+                "\nActual name: 'invalid_name'"
+            ),
+        ):
+            main.spatialize_chunk_predictions(flask.request)
 
 
 @mock.patch.object(storage.client, "Client", autospec=True)
@@ -71,20 +64,6 @@ def test_spatialize_chunk_predictions_invalid_object_name() -> None:
 def test_spatialize_chunk_predictions_missing_study_area(
     mock_firestore_client, mock_storage_client
 ) -> None:
-    event = http.CloudEvent(
-        {
-            "type": "google.cloud.pubsub.topic.v1.messagePublished",
-            "source": "source",
-        },
-        {
-            "message": {
-                "data": base64.b64encode(
-                    b"id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
-                ),
-            }
-        },
-    )
-
     # Build mock Storage object
     predictions = (
         '{"instance": {"values": [1, 2, 3, 4], "key": 1},'
@@ -99,11 +78,13 @@ def test_spatialize_chunk_predictions_missing_study_area(
     )
     mock_study_area_ref.get().exists = False  # Indicate study area doesn't exist
 
-    output = io.StringIO()
-    with contextlib.redirect_stdout(output):
-        main.spatialize_chunk_predictions(event)
-
-    assert 'Study area "study-area-name" does not exist' in output.getvalue()
+    with _create_request_context(
+        "id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
+    ):
+        with pytest.raises(
+            ValueError, match='Study area "study-area-name" does not exist'
+        ):
+            main.spatialize_chunk_predictions(flask.request)
 
 
 @mock.patch.object(storage.client, "Client", autospec=True)
@@ -111,20 +92,6 @@ def test_spatialize_chunk_predictions_missing_study_area(
 def test_spatialize_chunk_predictions_invalid_study_area(
     mock_firestore_client, mock_storage_client
 ) -> None:
-    event = http.CloudEvent(
-        {
-            "type": "google.cloud.pubsub.topic.v1.messagePublished",
-            "source": "source",
-        },
-        {
-            "message": {
-                "data": base64.b64encode(
-                    b"id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
-                ),
-            }
-        },
-    )
-
     # Build mock Storage object
     predictions = (
         '{"instance": {"values": [1, 2, 3, 4], "key": 1},'
@@ -158,14 +125,17 @@ def test_spatialize_chunk_predictions_invalid_study_area(
     mock_chunks_ref = mock_study_area_ref.collection("chunks")
     mock_chunks_ref.get.return_value = chunks_metadata
 
-    output = io.StringIO()
-    with contextlib.redirect_stdout(output):
-        main.spatialize_chunk_predictions(event)
-
-    assert (
-        'Study area "study-area-name" is missing one or more required '
-        "fields: cell_size, crs, chunk_x_count, chunk_y_count" in output.getvalue()
-    )
+    with _create_request_context(
+        "id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
+    ):
+        with pytest.raises(
+            ValueError,
+            match=(
+                'Study area "study-area-name" is missing one or more required '
+                "fields: cell_size, crs, chunk_x_count, chunk_y_count"
+            ),
+        ):
+            main.spatialize_chunk_predictions(flask.request)
 
 
 @mock.patch.object(storage.client, "Client", autospec=True)
@@ -173,20 +143,6 @@ def test_spatialize_chunk_predictions_invalid_study_area(
 def test_spatialize_chunk_predictions_missing_chunk(
     mock_firestore_client, mock_storage_client
 ) -> None:
-    event = http.CloudEvent(
-        {
-            "type": "google.cloud.pubsub.topic.v1.messagePublished",
-            "source": "source",
-        },
-        {
-            "message": {
-                "data": base64.b64encode(
-                    b"id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
-                ),
-            }
-        },
-    )
-
     # Build mock Storage object
     predictions = (
         '{"instance": {"values": [1, 2, 3, 4], "key": 1},'
@@ -222,11 +178,11 @@ def test_spatialize_chunk_predictions_missing_chunk(
     mock_chunks_ref.get.return_value = chunks_metadata
     mock_chunks_ref.document("chunk-id").get().exists = False
 
-    output = io.StringIO()
-    with contextlib.redirect_stdout(output):
-        main.spatialize_chunk_predictions(event)
-
-    assert 'Chunk "chunk-id" does not exist' in output.getvalue()
+    with _create_request_context(
+        "id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
+    ):
+        with pytest.raises(ValueError, match='Chunk "chunk-id" does not exist'):
+            main.spatialize_chunk_predictions(flask.request)
 
 
 @mock.patch.object(storage.client, "Client", autospec=True)
@@ -234,20 +190,6 @@ def test_spatialize_chunk_predictions_missing_chunk(
 def test_spatialize_chunk_predictions_invalid_chunk(
     mock_firestore_client, mock_storage_client
 ) -> None:
-    event = http.CloudEvent(
-        {
-            "type": "google.cloud.pubsub.topic.v1.messagePublished",
-            "source": "source",
-        },
-        {
-            "message": {
-                "data": base64.b64encode(
-                    b"id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
-                ),
-            }
-        },
-    )
-
     # Build mock Storage object
     predictions = (
         '{"instance": {"values": [1, 2, 3, 4], "key": 1},'
@@ -282,14 +224,17 @@ def test_spatialize_chunk_predictions_invalid_chunk(
     mock_chunks_ref.get.return_value = chunks_metadata
     mock_chunks_ref.document("chunk-id").get().to_dict.return_value = chunks_metadata[0]
 
-    output = io.StringIO()
-    with contextlib.redirect_stdout(output):
-        main.spatialize_chunk_predictions(event)
-
-    assert (
-        'Chunk "chunk-id" is missing one or more required '
-        "fields: row_count, col_count, x_ll_corner, y_ll_corner" in output.getvalue()
-    )
+    with _create_request_context(
+        "id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
+    ):
+        with pytest.raises(
+            ValueError,
+            match=(
+                'Chunk "chunk-id" is missing one or more required '
+                "fields: row_count, col_count, x_ll_corner, y_ll_corner"
+            ),
+        ):
+            main.spatialize_chunk_predictions(flask.request)
 
 
 @mock.patch.object(storage.client, "Client", autospec=True)
@@ -297,20 +242,6 @@ def test_spatialize_chunk_predictions_invalid_chunk(
 def test_spatialize_chunk_predictions_missing_predictions(
     mock_firestore_client, mock_storage_client
 ) -> None:
-    event = http.CloudEvent(
-        {
-            "type": "google.cloud.pubsub.topic.v1.messagePublished",
-            "source": "source",
-        },
-        {
-            "message": {
-                "data": base64.b64encode(
-                    b"id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
-                ),
-            }
-        },
-    )
-
     # Build mock Storage object
     predictions = ""
     with mock_storage_client().bucket("").blob("").open() as mock_fd:
@@ -343,14 +274,17 @@ def test_spatialize_chunk_predictions_missing_predictions(
     mock_chunks_ref.get.return_value = chunks_metadata
     mock_chunks_ref.document("chunk-id").get().to_dict.return_value = chunks_metadata[0]
 
-    output = io.StringIO()
-    with contextlib.redirect_stdout(output):
-        main.spatialize_chunk_predictions(event)
-
-    assert (
-        "Predictions file: id/prediction-type/model-id/study-area-name/scenario-id/"
-        "chunk-id is missing." in output.getvalue()
-    )
+    with _create_request_context(
+        "id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
+    ):
+        with pytest.raises(
+            ValueError,
+            match=(
+                "Predictions file: id/prediction-type/model-id/study-area-name/"
+                "scenario-id/chunk-id is missing."
+            ),
+        ):
+            main.spatialize_chunk_predictions(flask.request)
 
 
 @mock.patch.object(storage.client, "Client", autospec=True)
@@ -358,20 +292,6 @@ def test_spatialize_chunk_predictions_missing_predictions(
 def test_spatialize_chunk_predictions_too_many_predictions(
     mock_firestore_client, mock_storage_client
 ) -> None:
-    event = http.CloudEvent(
-        {
-            "type": "google.cloud.pubsub.topic.v1.messagePublished",
-            "source": "source",
-        },
-        {
-            "message": {
-                "data": base64.b64encode(
-                    b"id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
-                ),
-            }
-        },
-    )
-
     # Build mock Storage object
     predictions = (
         '{"instance": {"values": [1, 2, 3, 4], "key": 1},'
@@ -410,11 +330,13 @@ def test_spatialize_chunk_predictions_too_many_predictions(
     mock_chunk_ref = mock_study_area_ref.collection("chunks").document("chunk-id")
     mock_chunk_ref.get().to_dict.return_value = chunks_metadata[0]
 
-    output = io.StringIO()
-    with contextlib.redirect_stdout(output):
-        main.spatialize_chunk_predictions(event)
-
-    assert "Predictions file has too many predictions" in output.getvalue()
+    with _create_request_context(
+        "id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
+    ):
+        with pytest.raises(
+            ValueError, match="Predictions file has too many predictions"
+        ):
+            main.spatialize_chunk_predictions(flask.request)
 
 
 @mock.patch.object(storage.client, "Client", autospec=True)
@@ -422,20 +344,6 @@ def test_spatialize_chunk_predictions_too_many_predictions(
 def test_spatialize_chunk_predictions_missing_expected_neighbor_chunk(
     mock_firestore_client, mock_storage_client
 ) -> None:
-    event = http.CloudEvent(
-        {
-            "type": "google.cloud.pubsub.topic.v1.messagePublished",
-            "source": "source",
-        },
-        {
-            "message": {
-                "data": base64.b64encode(
-                    b"id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
-                ),
-            }
-        },
-    )
-
     # Build mock Storage object
     predictions = (
         '{"instance": {"values": [1, 2, 3, 4], "key": 1},'
@@ -474,12 +382,14 @@ def test_spatialize_chunk_predictions_missing_expected_neighbor_chunk(
         []
     )  # Neighbor chunks do not exist.
 
-    output = io.StringIO()
-    with contextlib.redirect_stdout(output):
-        main.spatialize_chunk_predictions(event)
-    assert "Neighbor chunk at index (0, 1) is missing from the study area" in str(
-        output.getvalue()
-    )
+    with _create_request_context(
+        "id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
+    ):
+        with pytest.raises(
+            ValueError,
+            match=r"Neighbor chunk at index \(0, 1\) is missing from the study area",
+        ):
+            main.spatialize_chunk_predictions(flask.request)
 
 
 @mock.patch.object(storage.client, "Client", autospec=True)
@@ -487,20 +397,6 @@ def test_spatialize_chunk_predictions_missing_expected_neighbor_chunk(
 def test_spatialize_chunk_predictions_invalid_neighbor_chunk(
     mock_firestore_client, mock_storage_client
 ) -> None:
-    event = http.CloudEvent(
-        {
-            "type": "google.cloud.pubsub.topic.v1.messagePublished",
-            "source": "source",
-        },
-        {
-            "message": {
-                "data": base64.b64encode(
-                    b"id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
-                ),
-            }
-        },
-    )
-
     # Build mock Storage object
     predictions = (
         '{"instance": {"values": [1, 2, 3, 4], "key": 1},'
@@ -543,15 +439,18 @@ def test_spatialize_chunk_predictions_invalid_neighbor_chunk(
     neighbor_metadata_mock.to_dict.return_value = neighbor_metadata
     mock_chunks_ref.where().where().limit().get.return_value = [neighbor_metadata_mock]
 
-    output = io.StringIO()
-    with contextlib.redirect_stdout(output):
-        main.spatialize_chunk_predictions(event)
-
-    assert (
-        "Neighbor chunk at index (0, 1) is missing one or more required fields: id,"
-        " row_count, col_count, x_ll_corner,y_ll_corner, x_index, y_index"
-        in output.getvalue()
-    )
+    with _create_request_context(
+        "id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
+    ):
+        with pytest.raises(
+            ValueError,
+            match=(
+                r"Neighbor chunk at index \(0, 1\) is missing one or more required "
+                "fields: id, row_count, col_count, x_ll_corner,y_ll_corner, x_index, "
+                "y_index"
+            ),
+        ):
+            main.spatialize_chunk_predictions(flask.request)
 
 
 @mock.patch.object(storage.client, "Client", autospec=True)
@@ -559,20 +458,6 @@ def test_spatialize_chunk_predictions_invalid_neighbor_chunk(
 def test_spatialize_chunk_predictions_neighbor_chunk_missing_predictions(
     mock_firestore_client, mock_storage_client
 ) -> None:
-    event = http.CloudEvent(
-        {
-            "type": "google.cloud.pubsub.topic.v1.messagePublished",
-            "source": "source",
-        },
-        {
-            "message": {
-                "data": base64.b64encode(
-                    b"id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
-                ),
-            }
-        },
-    )
-
     # Build mock Storage object
     predictions = (
         '{"instance": {"values": [1, 2, 3, 4], "key": 1},'
@@ -616,14 +501,17 @@ def test_spatialize_chunk_predictions_neighbor_chunk_missing_predictions(
     neighbor_metadata_mock.to_dict.return_value = neighbor_metadata
     mock_chunks_ref.where().where().limit().get.return_value = [neighbor_metadata_mock]
 
-    output = io.StringIO()
-    with contextlib.redirect_stdout(output):
-        main.spatialize_chunk_predictions(event)
-
-    assert (
-        "Predictions file: id/prediction-type/model-id/study-area-name/scenario-id/"
-        "neighbor-chunk-id is missing."
-    ) in output.getvalue()
+    with _create_request_context(
+        "id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
+    ):
+        with pytest.raises(
+            ValueError,
+            match=(
+                "Predictions file: id/prediction-type/model-id/study-area-name/"
+                "scenario-id/neighbor-chunk-id is missing."
+            ),
+        ):
+            main.spatialize_chunk_predictions(flask.request)
 
 
 @mock.patch.object(storage.client, "Client", autospec=True)
@@ -631,20 +519,6 @@ def test_spatialize_chunk_predictions_neighbor_chunk_missing_predictions(
 def test_spatialize_chunk_predictions_h3_centroids_within_chunk(
     mock_firestore_client, mock_storage_client, tmp_path
 ) -> None:
-    event = http.CloudEvent(
-        {
-            "type": "google.cloud.pubsub.topic.v1.messagePublished",
-            "source": "source",
-        },
-        {
-            "message": {
-                "data": base64.b64encode(
-                    b"id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
-                ),
-            }
-        },
-    )
-
     # Build mock Storage object
     predictions = (
         '{"instance": {"values": [1, 2, 3, 4], "key": 1},'
@@ -723,7 +597,10 @@ def test_spatialize_chunk_predictions_h3_centroids_within_chunk(
     )
     expected_series.index.name = "h3_index"
 
-    main.spatialize_chunk_predictions(event)
+    with _create_request_context(
+        "id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
+    ):
+        main.spatialize_chunk_predictions(flask.request)
 
     pd.testing.assert_series_equal(
         pd.read_csv(output_file_path, index_col=0)["prediction"],
@@ -737,20 +614,6 @@ def test_spatialize_chunk_predictions_h3_centroids_within_chunk(
 def test_spatialize_chunk_predictions_h3_centroids_outside_chunk(
     mock_firestore_client, mock_storage_client, tmp_path
 ) -> None:
-    event = http.CloudEvent(
-        {
-            "type": "google.cloud.pubsub.topic.v1.messagePublished",
-            "source": "source",
-        },
-        {
-            "message": {
-                "data": base64.b64encode(
-                    b"id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
-                ),
-            }
-        },
-    )
-
     # Build mock Storage object
     predictions = (
         '{"instance":  {"values": [1, 2, 3, 4], "key": 1},'
@@ -842,7 +705,10 @@ def test_spatialize_chunk_predictions_h3_centroids_outside_chunk(
     )
     expected_series.index.name = "h3_index"
 
-    main.spatialize_chunk_predictions(event)
+    with _create_request_context(
+        "id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
+    ):
+        main.spatialize_chunk_predictions(flask.request)
 
     pd.testing.assert_series_equal(
         pd.read_csv(output_file_path, index_col=0)["prediction"],
@@ -856,20 +722,6 @@ def test_spatialize_chunk_predictions_h3_centroids_outside_chunk(
 def test_spatialize_chunk_predictions_overlapping_neighbors(
     mock_firestore_client, mock_storage_client, tmp_path
 ) -> None:
-    event = http.CloudEvent(
-        {
-            "type": "google.cloud.pubsub.topic.v1.messagePublished",
-            "source": "source",
-        },
-        {
-            "message": {
-                "data": base64.b64encode(
-                    b"id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
-                ),
-            }
-        },
-    )
-
     # Build mock Storage object
     predictions = (
         '{"instance":  {"values": [1, 2, 3, 4], "key": 1}, '
@@ -1068,7 +920,10 @@ def test_spatialize_chunk_predictions_overlapping_neighbors(
     )
     expected_series.index.name = "h3_index"
 
-    main.spatialize_chunk_predictions(event)
+    with _create_request_context(
+        "id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
+    ):
+        main.spatialize_chunk_predictions(flask.request)
 
     pd.testing.assert_series_equal(
         pd.read_csv(output_file_path, index_col=0)["prediction"],

@@ -1,18 +1,19 @@
-import base64
+from concurrent import futures
+import itertools
 import json
-import pandas as pd
 import pathlib
 import os
-import numpy as np
+from typing import Any, Callable
+
+import flask
 import functions_framework
 import geopandas as gpd
-
-from typing import Any
-from cloudevents import http
 from google.cloud import firestore_v1
 from google.cloud.storage import client as gcs_client
-from shapely import geometry
 from h3 import h3
+import numpy as np
+import pandas as pd
+from shapely import geometry
 
 INPUT_BUCKET_NAME = os.environ.get("BUCKET_PREFIX", "") + "climateiq-chunk-predictions"
 OUTPUT_BUCKET_NAME = (
@@ -24,31 +25,38 @@ GLOBAL_CRS = "EPSG:4326"
 H3_LEVEL = 13
 STUDY_AREAS_ID = "study_areas"
 CHUNKS_ID = "chunks"
+# Number of processes to split a Dataframe into when adding h3 data.
+NUM_PROCESSES = 8
 
 
-# Triggered from a message on the "climateiq-spatialize-and-export-predictions"
-# Pub/Sub topic.
-@functions_framework.cloud_event
-def spatialize_chunk_predictions(cloud_event: http.CloudEvent) -> None:
+def _get_object_name(request: flask.Request) -> str:
+    req_json = request.get_json(silent=True)
+    if req_json is None or "object_name" not in req_json:
+        raise ValueError("No object_name provided in request.\n")
+    return req_json["object_name"]
+
+
+# Triggered from a HTTP request.
+@functions_framework.http
+def spatialize_chunk_predictions(request: flask.Request):
     """This function spatializes model predictions for a single chunk.
 
     Spatialized model predictions are outputtted to a CSV file in GCS,
     containing H3 indexes along with associated predictions.
 
     Args:
-        cloud_event: The CloudEvent representing the Pub/Sub message.
+        request: The HTTP request to this Cloud Function.
     """
-    object_name = base64.b64decode(cloud_event.data["message"]["data"]).decode()
+    object_name = _get_object_name(request)
 
     # Extract components from the object name.
     path = pathlib.PurePosixPath(object_name)
     if len(path.parts) != 6:
-        print(
+        raise ValueError(
             f"Invalid object name format. Expected format: '<id>/<prediction_type>/"
             "<model_id>/<study_area_name>/<scenario_id>/<chunk_id>'\n"
             f"Actual name: '{object_name}'"
         )
-        return
 
     id, prediction_type, model_id, study_area_name, scenario_id, chunk_id = path.parts
     try:
@@ -70,8 +78,7 @@ def spatialize_chunk_predictions(cloud_event: http.CloudEvent) -> None:
     except ValueError as ve:
         # Any raised ValueErrors are non-retriable so return instead of throwing an
         # exception (which would trigger retries)
-        print(f"Error for {object_name}: {ve}")
-        return
+        raise ValueError(f"Error for {object_name}: {ve}")
 
     storage_client = gcs_client.Client()
     bucket = storage_client.bucket(OUTPUT_BUCKET_NAME)
@@ -81,6 +88,8 @@ def spatialize_chunk_predictions(cloud_event: http.CloudEvent) -> None:
     )
     with blob.open("w") as fd:
         h3_predictions.to_csv(fd)
+
+    return "Success!"
 
 
 # TODO: Modify this logic once CNN output schema is confirmed. Also update to
@@ -139,7 +148,7 @@ def _read_neighbor_chunk_predictions(
             "<model_id>/<study_area_name>/<scenario_id>/<chunk_id>'\n"
             f"Actual name: '{object_name}'"
         )
-    *prefix, current_chunk_id = path.parts
+    *prefix, _ = path.parts
     neighbor_object_name = pathlib.PurePosixPath(*prefix, neighbor_chunk_id)
     return _read_chunk_predictions(str(neighbor_object_name))
 
@@ -289,7 +298,23 @@ def _build_spatialized_model_predictions(
     )
 
 
-def _add_h3_index_details(cell: pd.Series, chunk_boundary: Any) -> pd.Series:
+def _get_h3_index_for_cells(lats: np.ndarray, lons: np.ndarray) -> list[str]:
+    """Projects cell centroids to H3 indices.
+
+    The lats and lons are paired.
+
+    Args:
+        lats: Numpy array of latitudes.
+        lons: Numpy array of longitudes.
+
+    Returns:
+        A list containing the H3 indices of the projected cell centroids.
+    """
+    cells = np.column_stack((lats, lons))
+    return [h3.geo_to_h3(cell[0], cell[1], H3_LEVEL) for cell in cells]
+
+
+def _get_h3_index_details(lat: float, lon: float, chunk_boundary: Any) -> dict:
     """Projects the cell centroid to a H3 index and adds H3 details.
 
     Args:
@@ -297,9 +322,9 @@ def _add_h3_index_details(cell: pd.Series, chunk_boundary: Any) -> pd.Series:
         chunk_boundary: A shapely.Polygon representing the chunk.
 
     Returns:
-        A Series containing H3 information for the projected cell centroid.
+        A dict containing H3 information for the projected cell centroid.
     """
-    h3_index = h3.geo_to_h3(cell["lat"], cell["lon"], H3_LEVEL)
+    h3_index = h3.geo_to_h3(lat, lon, H3_LEVEL)
     centroid_lat, centroid_lon = h3.h3_to_geo(h3_index)
     boundary_xy = geometry.Polygon(h3.h3_to_geo_boundary(h3_index, True))
     is_boundary_cell = not boundary_xy.within(chunk_boundary)
@@ -313,27 +338,69 @@ def _add_h3_index_details(cell: pd.Series, chunk_boundary: Any) -> pd.Series:
         boundary_xy = None
         is_boundary_cell = False
 
-    return pd.Series(
-        {
-            "h3_index": h3_index,
-            "h3_centroid_lat": centroid_lat,
-            "h3_centroid_lon": centroid_lon,
-            "h3_boundary": boundary_xy,
-            "is_boundary_cell": is_boundary_cell,
-        }
-    )
+    return {
+        "h3_index": h3_index,
+        "h3_centroid_lat": centroid_lat,
+        "h3_centroid_lon": centroid_lon,
+        "h3_boundary": boundary_xy,
+        "is_boundary_cell": is_boundary_cell,
+    }
 
 
-def _add_h3_index(cell: pd.Series) -> pd.Series:
-    """Projects the cell centroid to a H3 index.
+def _get_h3_index_details_for_cells(
+    lats: np.ndarray, lons: np.ndarray, chunk_boundary: Any
+) -> list[dict[str, Any]]:
+    """Calls _get_h3_index_details on a set of cells.
+
+    The lats and lons are paired.
 
     Args:
-        cell: A cell row containing the lat and lon of the cell centroid.
+        lats: Numpy array of latitudes.
+        lons: Numpy array of longitudes.
 
     Returns:
-        A Series containing the H3 index of the projected cell centroid.
+        A list of dicts of H3 information for the projected cell centroids.
     """
-    return pd.Series({"h3_index": h3.geo_to_h3(cell["lat"], cell["lon"], H3_LEVEL)})
+    cells = np.column_stack((lats, lons))
+    return [_get_h3_index_details(cell[0], cell[1], chunk_boundary) for cell in cells]
+
+
+def _multiprocess_get_h3(
+    spatialized_predictions: pd.DataFrame,
+    get_h3_fn: Callable[..., list[Any]],
+    *get_h3_fn_extra_args,
+) -> list[Any]:
+    """Calls get h3 indices/details function on a DataFrame of predictions in parallel.
+
+    Args:
+        spatialized_predictions: A Pandas DataFrame of predictions.
+        get_h3_fn: A function that gets h3 indices or details. Takes args of:
+            * Numpy array of latitudes
+            * Numpy array of longitudes
+            * Any number of additional args.
+        get_h3_fn_extra_args: Extra args to pass into get_h3_fn after the lats and lons.
+    Returns:
+        List of results for each row. Row order is same as original DataFrame.
+    """
+    max_rows_per_process = max(
+        1, int(len(spatialized_predictions.index) / NUM_PROCESSES)
+    )
+    subset_futures = []
+    with futures.ProcessPoolExecutor() as executor:
+        for i in range(0, len(spatialized_predictions.index), max_rows_per_process):
+            subset = spatialized_predictions[i : i + max_rows_per_process]
+            # Pandas is not threadsafe, so we pass in numpy arrays instead.
+            future = executor.submit(
+                get_h3_fn,
+                subset["lat"].to_numpy(),
+                subset["lon"].to_numpy(),
+                *get_h3_fn_extra_args,
+            )
+            subset_futures.append(future)
+    futures.wait(subset_futures)
+    return list(
+        itertools.chain.from_iterable(future.result() for future in subset_futures)
+    )
 
 
 def _get_chunk_boundary(study_area_metadata: dict, chunk_metadata: dict):
@@ -402,17 +469,29 @@ def _calculate_h3_indexes(
     """
     # Calculate H3 information for each cell.
     chunk_boundary = _get_chunk_boundary(study_area_metadata, chunk_metadata)
-    spatialized_predictions[
-        [
-            "h3_index",
-            "h3_centroid_lat",
-            "h3_centroid_lon",
-            "h3_boundary",
-            "is_boundary_cell",
-        ]
-    ] = spatialized_predictions.apply(
-        lambda row: _add_h3_index_details(row, chunk_boundary), axis=1
+
+    h3_index_details = _multiprocess_get_h3(
+        spatialized_predictions, _get_h3_index_details_for_cells, chunk_boundary
     )
+
+    # It's more efficient to add all column values at once instead of iterating row by
+    # row.
+    spatialized_predictions["h3_index"] = [
+        detail["h3_index"] for detail in h3_index_details
+    ]
+    spatialized_predictions["h3_centroid_lat"] = [
+        detail["h3_centroid_lat"] for detail in h3_index_details
+    ]
+    spatialized_predictions["h3_centroid_lon"] = [
+        detail["h3_centroid_lon"] for detail in h3_index_details
+    ]
+    spatialized_predictions["h3_boundary"] = [
+        detail["h3_boundary"] for detail in h3_index_details
+    ]
+    spatialized_predictions["is_boundary_cell"] = [
+        detail["is_boundary_cell"] for detail in h3_index_details
+    ]
+
     spatialized_predictions = spatialized_predictions.dropna(how="any")
 
     # Extract rows where the projected H3 cell is not fully contained within the chunk
@@ -544,9 +623,12 @@ def _aggregate_h3_predictions(
                     neighbor_chunk_predictions,
                 )
             )
-            neighbor_chunk_spatialized_predictions[["h3_index"]] = (
-                neighbor_chunk_spatialized_predictions.apply(_add_h3_index, axis=1)
+
+            neighbor_chunk_spatialized_predictions["h3_index"] = _multiprocess_get_h3(
+                neighbor_chunk_spatialized_predictions,
+                _get_h3_index_for_cells,
             )
+
             neighbor_chunk_spatialized_predictions = (
                 neighbor_chunk_spatialized_predictions[
                     neighbor_chunk_spatialized_predictions["h3_index"].isin(

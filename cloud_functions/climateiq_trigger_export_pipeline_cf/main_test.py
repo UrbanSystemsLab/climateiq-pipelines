@@ -1,10 +1,10 @@
-import main
-import io
-
-from contextlib import redirect_stdout
+from concurrent import futures
 from unittest import mock
+
 from cloudevents import http
 from google.cloud import storage, pubsub_v1
+import pytest
+import main
 
 
 def _create_pubsub_event() -> http.CloudEvent:
@@ -30,16 +30,13 @@ def test_trigger_export_pipeline_invalid_object_name():
     }
     event = http.CloudEvent(attributes, data)
 
-    output = io.StringIO()
-    with redirect_stdout(output):
-        main.trigger_export_pipeline(event)
-
     expected_error = (
         "Invalid object name format. Expected format: '<id>/<prediction_type>/"
         "<model_id>/<study_area_name>/<scenario_id>/prediction.results-"
         "<file_number>-of-{number_of_files_generated}'\nActual name: 'invalid_name'"
     )
-    assert expected_error in output.getvalue()
+    with pytest.raises(ValueError, match=expected_error):
+        main.trigger_export_pipeline(event)
 
 
 @mock.patch.object(pubsub_v1, "PublisherClient", autospec=True)
@@ -105,8 +102,8 @@ def test_trigger_export_pipeline(mock_storage_client, mock_publisher):
     mock_publisher().topic_path.return_value = (
         "projects/climateiq/topics/climateiq-spatialize-and-export-predictions"
     )
-    mock_future = mock.MagicMock()
-    mock_future.result.return_value = "message_id"
+    mock_future = futures.Future()
+    mock_future.set_result("message_id")
     mock_publisher().publish.return_value = mock_future
 
     # Output blobs setup
@@ -125,7 +122,7 @@ def test_trigger_export_pipeline(mock_storage_client, mock_publisher):
             f'{{"instance": {{"values": [{(i - 1) % 2}], "key": {i}}},'
             f'"prediction": [[1, 2, 3], [4, 5, 6]]}}'
         )
-        output_blob.upload_from_string.assert_called_with(expected_data)
+        output_blob.upload_from_string.assert_called_with(expected_data, retry=mock.ANY)
 
     # Confirm messages published
     expected_topic_name = (
@@ -133,15 +130,11 @@ def test_trigger_export_pipeline(mock_storage_client, mock_publisher):
     )
     expected_origin = "climateiq_trigger_export_pipeline_cf"
     expected_calls = [
-        message
-        for i in range(1, 11)
-        for message in (
-            mock.call(
-                expected_topic_name,
-                data=f"id1/flood/v1.0/manhattan/extreme/{i}".encode(),
-                origin=expected_origin,
-            ),
-            mock.call().result(),
+        mock.call(
+            expected_topic_name,
+            data=f"id1/flood/v1.0/manhattan/extreme/{i}".encode(),
+            origin=expected_origin,
         )
+        for i in range(1, 11)
     ]
     mock_publisher().publish.assert_has_calls(expected_calls)
