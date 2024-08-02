@@ -29,7 +29,9 @@ def _create_mock_blob(
     blob = mock.create_autospec(storage.Blob, instance=True)
     blob.name = name
     if tmp_file_path:
-        blob.open.side_effect = lambda mode="r+": open(tmp_file_path, mode=mode)
+        blob.open.side_effect = lambda mode="r+", content_type=None: open(
+            tmp_file_path, mode=mode
+        )
     blob.exists.return_value = exists
     return blob
 

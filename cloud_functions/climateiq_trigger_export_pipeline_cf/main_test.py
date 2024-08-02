@@ -1,8 +1,9 @@
-from concurrent import futures
+import json
 from unittest import mock
 
 from cloudevents import http
-from google.cloud import storage, pubsub_v1
+from google.cloud import storage, tasks_v2
+from google.cloud.storage import blob, client as gcs_client
 import pytest
 import main
 
@@ -39,10 +40,10 @@ def test_trigger_export_pipeline_invalid_object_name():
         main.trigger_export_pipeline(event)
 
 
-@mock.patch.object(pubsub_v1, "PublisherClient", autospec=True)
-@mock.patch.object(storage, "Client", autospec=True)
+@mock.patch.object(tasks_v2, "CloudTasksClient", autospec=True)
+@mock.patch.object(gcs_client, "Client", autospec=True)
 def test_trigger_export_pipeline_missing_prediction_files(
-    mock_storage_client, mock_publisher
+    mock_storage_client, mock_tasks_client
 ):
     event = _create_pubsub_event()
 
@@ -65,12 +66,12 @@ def test_trigger_export_pipeline_missing_prediction_files(
 
     main.trigger_export_pipeline(event)
 
-    mock_publisher().topic_path.assert_not_called()
+    mock_tasks_client().create_task.assert_not_called()
 
 
-@mock.patch.object(pubsub_v1, "PublisherClient", autospec=True)
-@mock.patch.object(storage, "Client", autospec=True)
-def test_trigger_export_pipeline(mock_storage_client, mock_publisher):
+@mock.patch.object(tasks_v2, "CloudTasksClient", autospec=True)
+@mock.patch.object(gcs_client, "Client", autospec=True)
+def test_trigger_export_pipeline(mock_storage_client, mock_tasks_client):
     event = _create_pubsub_event()
 
     # Input blobs setup
@@ -83,7 +84,7 @@ def test_trigger_export_pipeline(mock_storage_client, mock_publisher):
                 for i in range(2)
             ]
         )
-        mock_blob = mock.MagicMock(spec=storage.Blob)
+        mock_blob = mock.MagicMock(spec=blob.Blob)
         mock_blob.name = name
         mock_file = mock.MagicMock()
         mock_file.__enter__.return_value = predictions.splitlines()
@@ -98,13 +99,8 @@ def test_trigger_export_pipeline(mock_storage_client, mock_publisher):
     ]
     mock_storage_client().list_blobs.return_value = input_blobs
 
-    # Publisher setup
-    mock_publisher().topic_path.return_value = (
-        "projects/climateiq/topics/climateiq-spatialize-and-export-predictions"
-    )
-    mock_future = futures.Future()
-    mock_future.set_result("message_id")
-    mock_publisher().publish.return_value = mock_future
+    # Cloud Tasks setup
+    mock_tasks_client().queue_path.return_value = ""
 
     # Output blobs setup
     mock_output_blobs = {}
@@ -124,17 +120,10 @@ def test_trigger_export_pipeline(mock_storage_client, mock_publisher):
         )
         output_blob.upload_from_string.assert_called_with(expected_data, retry=mock.ANY)
 
-    # Confirm messages published
-    expected_topic_name = (
-        "projects/climateiq/topics/climateiq-spatialize-and-export-predictions"
-    )
-    expected_origin = "climateiq_trigger_export_pipeline_cf"
-    expected_calls = [
-        mock.call(
-            expected_topic_name,
-            data=f"id1/flood/v1.0/manhattan/extreme/{i}".encode(),
-            origin=expected_origin,
+    # Confirm create task requests created.
+    assert len(mock_tasks_client().create_task.call_args_list) == 10
+    for i, call_args in enumerate(mock_tasks_client().create_task.call_args_list):
+        (req,), _ = call_args
+        assert json.loads(req.task.http_request.body)["object_name"] == (
+            f"id1/flood/v1.0/manhattan/extreme/{i + 1}"
         )
-        for i in range(1, 11)
-    ]
-    mock_publisher().publish.assert_has_calls(expected_calls)

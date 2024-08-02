@@ -86,7 +86,7 @@ def spatialize_chunk_predictions(request: flask.Request):
         f"{id}/{prediction_type}/{model_id}/{study_area_name}/{scenario_id}/{chunk_id}"
         ".csv"
     )
-    with blob.open("w") as fd:
+    with blob.open("w", content_type="text/csv") as fd:
         h3_predictions.to_csv(fd)
 
     return "Success!"

@@ -1,24 +1,34 @@
 from concurrent import futures
-import functions_framework
 import pathlib
 import json
 import os
 import time
 
-from google.cloud import pubsub_v1, storage
 from cloudevents import http
+import functions_framework
+from google.cloud import tasks_v2
+from google.cloud.storage import client as gcs_client, retry
 
 INPUT_BUCKET_NAME = os.environ.get("BUCKET_PREFIX", "") + "climateiq-predictions"
 OUTPUT_BUCKET_NAME = os.environ.get("BUCKET_PREFIX", "") + "climateiq-chunk-predictions"
 CLIMATEIQ_PROJECT_ID = "climateiq-" + os.environ.get("BUCKET_PREFIX", "").rstrip("-")
 CLIMATEIQ_EXPORT_PIPELINE_TOPIC_ID = "climateiq-spatialize-and-export-predictions"
+REGION = "us-central1"
+SPATIALIZE_CF_URL = (
+    f"https://{REGION}-{CLIMATEIQ_PROJECT_ID}.cloudfunctions.net"
+    "/spatialize-chunk-predictions"
+)
+SPATIALIZE_CF_SERVICE_ACCOUNT_EMAIL = (
+    f"gcf-spatialize-predictions-sa@{CLIMATEIQ_PROJECT_ID}.iam.gserviceaccount.com"
+)
+SPATIALIZE_CF_QUEUE = "spatialize-chunk-predictions-queue"
 
 
-def _write_file(line: str, output_filename: str, storage_client: storage.Client):
+def _write_file(line: str, output_filename: str, storage_client: gcs_client.Client):
     output_blob = storage_client.bucket(OUTPUT_BUCKET_NAME).blob(output_filename)
     # Specify retry here due to bug:
     # https://github.com/googleapis/python-storage/issues/1242
-    output_blob.upload_from_string(line, retry=storage.retry.DEFAULT_RETRY)
+    output_blob.upload_from_string(line, retry=retry.DEFAULT_RETRY)
 
 
 @functions_framework.cloud_event
@@ -40,10 +50,6 @@ def trigger_export_pipeline(cloud_event: http.CloudEvent) -> None:
 
     data = cloud_event.data
     object_name = data["name"]
-
-    # Structured logging:
-    # https://cloud.google.com/functions/docs/monitoring/logging#writing_structured_logs
-    print(json.dumps(dict(severity="DEBUG", message=f"[{object_name}] CF started")))
 
     # Extract components from the object name and determine the total number of
     # output prediction files.
@@ -77,7 +83,7 @@ def trigger_export_pipeline(cloud_event: http.CloudEvent) -> None:
         )
 
     # Retrieve all input prediction files.
-    storage_client = storage.Client()
+    storage_client = gcs_client.Client()
     input_blobs = list(
         storage_client.list_blobs(
             INPUT_BUCKET_NAME,
@@ -124,27 +130,44 @@ def trigger_export_pipeline(cloud_event: http.CloudEvent) -> None:
         )
     )
 
-    # Once all output files have been written, publish pubsub message per chunk to kick
-    # off export pipeline.
-    publisher = pubsub_v1.PublisherClient()
-    topic_path = publisher.topic_path(
-        CLIMATEIQ_PROJECT_ID, CLIMATEIQ_EXPORT_PIPELINE_TOPIC_ID
-    )
-    publish_futures = []
-    for output_filename in output_filenames:
-        future = publisher.publish(
-            topic_path,
-            data=output_filename.encode("utf-8"),
-            origin="climateiq_trigger_export_pipeline_cf",
-        )
-        publish_futures.append(future)
-    futures.wait(publish_futures)
+    # Once all output files have been written, push tasks to Task Queue.
+    tasks_client = tasks_v2.CloudTasksClient()
+    queue_futures = []
+    with futures.ThreadPoolExecutor() as executor:
+        for output_filename in output_filenames:
+            task = tasks_v2.Task(
+                http_request=tasks_v2.HttpRequest(
+                    http_method=tasks_v2.HttpMethod.POST,
+                    url=SPATIALIZE_CF_URL,
+                    headers={"Content-type": "application/json"},
+                    oidc_token=tasks_v2.OidcToken(
+                        service_account_email=SPATIALIZE_CF_SERVICE_ACCOUNT_EMAIL,
+                        audience=SPATIALIZE_CF_URL,
+                    ),
+                    body=json.dumps({"object_name": output_filename}).encode("utf-8"),
+                ),
+            )
+            queue_futures.append(
+                executor.submit(
+                    tasks_client.create_task,
+                    tasks_v2.CreateTaskRequest(
+                        parent=tasks_client.queue_path(
+                            CLIMATEIQ_PROJECT_ID,
+                            REGION,
+                            SPATIALIZE_CF_QUEUE,
+                        ),
+                        task=task,
+                    ),
+                )
+            )
+    futures.wait(queue_futures)
+
     print(
         json.dumps(
             dict(
                 severity="DEBUG",
                 message=(
-                    f"[{object_name}] Started export pipeline for "
+                    f"[{object_name}] Triggered export pipeline for "
                     f"{len(output_filenames)} chunks."
                 ),
             )
