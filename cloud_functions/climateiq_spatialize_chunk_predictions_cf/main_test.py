@@ -1,14 +1,24 @@
+import contextlib
+import io
 import json
 import tempfile
 
 import flask
 from google.cloud import firestore_v1, storage
 import pandas as pd
-import pytest
 from typing import Any, Dict, List
 from unittest import mock
 
 import main
+
+
+@contextlib.contextmanager
+def assert_prints(message: str):
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        yield
+    escaped_message = message.replace("'", "'").replace('"', '\\"').replace("\n", "\\n")
+    assert escaped_message in output.getvalue()
 
 
 def _create_request_context(object_name: str) -> flask.ctx.RequestContext:
@@ -50,13 +60,12 @@ def _create_mock_bucket(tmp_files: dict[str, str]) -> mock.MagicMock:
 
 def test_spatialize_chunk_predictions_invalid_object_name() -> None:
     with _create_request_context("invalid_name"):
-        with pytest.raises(
-            ValueError,
-            match=(
+        with assert_prints(
+            (
                 "Invalid object name format. Expected format: '<id>/<prediction_type>/"
                 "<model_id>/<study_area_name>/<scenario_id>/<chunk_id>'"
                 "\nActual name: 'invalid_name'"
-            ),
+            )
         ):
             main.spatialize_chunk_predictions(flask.request)
 
@@ -83,9 +92,7 @@ def test_spatialize_chunk_predictions_missing_study_area(
     with _create_request_context(
         "id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
     ):
-        with pytest.raises(
-            ValueError, match='Study area "study-area-name" does not exist'
-        ):
+        with assert_prints('Study area "study-area-name" does not exist'):
             main.spatialize_chunk_predictions(flask.request)
 
 
@@ -130,12 +137,9 @@ def test_spatialize_chunk_predictions_invalid_study_area(
     with _create_request_context(
         "id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
     ):
-        with pytest.raises(
-            ValueError,
-            match=(
-                'Study area "study-area-name" is missing one or more required '
-                "fields: cell_size, crs, chunk_x_count, chunk_y_count"
-            ),
+        with assert_prints(
+            'Study area "study-area-name" is missing one or more required '
+            "fields: cell_size, crs, chunk_x_count, chunk_y_count"
         ):
             main.spatialize_chunk_predictions(flask.request)
 
@@ -183,7 +187,7 @@ def test_spatialize_chunk_predictions_missing_chunk(
     with _create_request_context(
         "id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
     ):
-        with pytest.raises(ValueError, match='Chunk "chunk-id" does not exist'):
+        with assert_prints('Chunk "chunk-id" does not exist'):
             main.spatialize_chunk_predictions(flask.request)
 
 
@@ -229,12 +233,9 @@ def test_spatialize_chunk_predictions_invalid_chunk(
     with _create_request_context(
         "id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
     ):
-        with pytest.raises(
-            ValueError,
-            match=(
-                'Chunk "chunk-id" is missing one or more required '
-                "fields: row_count, col_count, x_ll_corner, y_ll_corner"
-            ),
+        with assert_prints(
+            'Chunk "chunk-id" is missing one or more required '
+            "fields: row_count, col_count, x_ll_corner, y_ll_corner"
         ):
             main.spatialize_chunk_predictions(flask.request)
 
@@ -279,12 +280,9 @@ def test_spatialize_chunk_predictions_missing_predictions(
     with _create_request_context(
         "id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
     ):
-        with pytest.raises(
-            ValueError,
-            match=(
-                "Predictions file: id/prediction-type/model-id/study-area-name/"
-                "scenario-id/chunk-id is missing."
-            ),
+        with assert_prints(
+            "Predictions file: id/prediction-type/model-id/study-area-name/"
+            "scenario-id/chunk-id is missing."
         ):
             main.spatialize_chunk_predictions(flask.request)
 
@@ -335,9 +333,7 @@ def test_spatialize_chunk_predictions_too_many_predictions(
     with _create_request_context(
         "id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
     ):
-        with pytest.raises(
-            ValueError, match="Predictions file has too many predictions"
-        ):
+        with assert_prints("Predictions file has too many predictions"):
             main.spatialize_chunk_predictions(flask.request)
 
 
@@ -387,9 +383,8 @@ def test_spatialize_chunk_predictions_missing_expected_neighbor_chunk(
     with _create_request_context(
         "id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
     ):
-        with pytest.raises(
-            ValueError,
-            match=r"Neighbor chunk at index \(0, 1\) is missing from the study area",
+        with assert_prints(
+            "Neighbor chunk at index (0, 1) is missing from the study area"
         ):
             main.spatialize_chunk_predictions(flask.request)
 
@@ -444,13 +439,10 @@ def test_spatialize_chunk_predictions_invalid_neighbor_chunk(
     with _create_request_context(
         "id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
     ):
-        with pytest.raises(
-            ValueError,
-            match=(
-                r"Neighbor chunk at index \(0, 1\) is missing one or more required "
-                "fields: id, row_count, col_count, x_ll_corner,y_ll_corner, x_index, "
-                "y_index"
-            ),
+        with assert_prints(
+            "Neighbor chunk at index (0, 1) is missing one or more required "
+            "fields: id, row_count, col_count, x_ll_corner,y_ll_corner, x_index, "
+            "y_index"
         ):
             main.spatialize_chunk_predictions(flask.request)
 
@@ -506,12 +498,9 @@ def test_spatialize_chunk_predictions_neighbor_chunk_missing_predictions(
     with _create_request_context(
         "id/prediction-type/model-id/study-area-name/scenario-id/chunk-id"
     ):
-        with pytest.raises(
-            ValueError,
-            match=(
-                "Predictions file: id/prediction-type/model-id/study-area-name/"
-                "scenario-id/neighbor-chunk-id is missing."
-            ),
+        with assert_prints(
+            "Predictions file: id/prediction-type/model-id/study-area-name/"
+            "scenario-id/neighbor-chunk-id is missing."
         ):
             main.spatialize_chunk_predictions(flask.request)
 

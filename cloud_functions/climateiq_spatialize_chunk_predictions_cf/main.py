@@ -25,8 +25,10 @@ GLOBAL_CRS = "EPSG:4326"
 H3_LEVEL = 13
 STUDY_AREAS_ID = "study_areas"
 CHUNKS_ID = "chunks"
-# Number of processes to split a Dataframe into when adding h3 data.
-NUM_PROCESSES = 8
+
+
+def _write_structured_log(message: str, severity: str = "INFO"):
+    print(json.dumps(dict(message=message, severity=severity)), flush=True)
 
 
 def _get_object_name(request: flask.Request) -> str:
@@ -52,11 +54,13 @@ def spatialize_chunk_predictions(request: flask.Request):
     # Extract components from the object name.
     path = pathlib.PurePosixPath(object_name)
     if len(path.parts) != 6:
-        raise ValueError(
+        _write_structured_log(
             f"Invalid object name format. Expected format: '<id>/<prediction_type>/"
             "<model_id>/<study_area_name>/<scenario_id>/<chunk_id>'\n"
-            f"Actual name: '{object_name}'"
+            f"Actual name: '{object_name}'",
+            "ERROR",
         )
+        return
 
     id, prediction_type, model_id, study_area_name, scenario_id, chunk_id = path.parts
     try:
@@ -78,7 +82,8 @@ def spatialize_chunk_predictions(request: flask.Request):
     except ValueError as ve:
         # Any raised ValueErrors are non-retriable so return instead of throwing an
         # exception (which would trigger retries)
-        raise ValueError(f"Error for {object_name}: {ve}")
+        _write_structured_log(f"Error for {object_name}: {ve}", "ERROR")
+        return
 
     storage_client = gcs_client.Client()
     bucket = storage_client.bucket(OUTPUT_BUCKET_NAME)
@@ -383,7 +388,7 @@ def _multiprocess_get_h3(
         List of results for each row. Row order is same as original DataFrame.
     """
     max_rows_per_process = max(
-        1, int(len(spatialized_predictions.index) / NUM_PROCESSES)
+        int(len(spatialized_predictions.index) / max((os.cpu_count() or 2) - 1, 1)), 1
     )
     subset_futures = []
     with futures.ProcessPoolExecutor() as executor:
@@ -397,7 +402,7 @@ def _multiprocess_get_h3(
                 *get_h3_fn_extra_args,
             )
             subset_futures.append(future)
-    futures.wait(subset_futures)
+    futures.wait(subset_futures, return_when=futures.FIRST_EXCEPTION)
     return list(
         itertools.chain.from_iterable(future.result() for future in subset_futures)
     )
