@@ -1,8 +1,10 @@
+from concurrent import futures
 from datetime import datetime
 import logging
 import os
 
 import boto3
+from botocore import config as boto_config
 import flask
 import functions_framework
 from google.cloud import storage
@@ -52,19 +54,31 @@ def export_to_aws(request: flask.Request) -> tuple[str, int]:
         "s3",
         aws_access_key_id=aws_access_key_id,
         aws_secret_access_key=aws_secret_access_key,
+        # Avoid "Connection pool is full" errors. max_workers of ThreadPoolExecutor
+        # will be 32 (the default value).
+        config=boto_config.Config(max_pool_connections=32),
     )
-    for i, blob in enumerate(blobs_to_export):
-        logging.info(f"Exporting {blob.name} ({i + 1}/{total_blobs})...")
-        with blob.open("rb") as fd:
-            s3_client.upload_fileobj(fd, S3_BUCKET_NAME, f"{curr_time_str}/{blob.name}")
-            blob.metadata = {"export_time": curr_time_str}
-            blob.patch()
-        logging.info(f"Successfully exported {blob.name} ({i + 1}/{total_blobs}).")
+    upload_futures = []
+    with futures.ThreadPoolExecutor() as executor:
+        for blob in blobs_to_export:
+            upload_futures.append(
+                executor.submit(_export_blob, blob, s3_client, curr_time_str)
+            )
+    futures.wait(upload_futures, return_when=futures.FIRST_EXCEPTION)
+    for future in upload_futures:
+        future.result()
     return (
         f"Successfully exported {total_blobs} CSV files to ClimaSens "
         f"({S3_BUCKET_NAME}/{curr_time_str}).\n",
         200,
     )
+
+
+def _export_blob(blob: storage.Blob, s3_client: boto3.client, curr_time_str: str):
+    with blob.open("rb") as fd:
+        s3_client.upload_fileobj(fd, S3_BUCKET_NAME, f"{curr_time_str}/{blob.name}")
+    blob.metadata = {"export_time": curr_time_str}
+    blob.patch()
 
 
 def _get_prefix_id(request: flask.Request) -> str:
