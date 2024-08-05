@@ -2,10 +2,9 @@ from concurrent import futures
 import pathlib
 import json
 import os
+import sys
 import time
 
-from cloudevents import http
-import functions_framework
 from google.cloud import tasks_v2
 from google.cloud.storage import client as gcs_client, retry
 
@@ -24,6 +23,10 @@ SPATIALIZE_CF_SERVICE_ACCOUNT_EMAIL = (
 SPATIALIZE_CF_QUEUE = "spatialize-chunk-predictions-queue"
 
 
+def _write_structured_log(message: str, severity: str = "INFO"):
+    print(json.dumps(dict(message=message, severity=severity)), flush=True)
+
+
 def _write_file(line: str, output_filename: str, storage_client: gcs_client.Client):
     output_blob = storage_client.bucket(OUTPUT_BUCKET_NAME).blob(output_filename)
     # Specify retry here due to bug:
@@ -31,8 +34,7 @@ def _write_file(line: str, output_filename: str, storage_client: gcs_client.Clie
     output_blob.upload_from_string(line, retry=retry.DEFAULT_RETRY)
 
 
-@functions_framework.cloud_event
-def trigger_export_pipeline(cloud_event: http.CloudEvent) -> None:
+def trigger_export_pipeline(object_name: str) -> None:
     """Triggered by writes to the "climateiq-predictions" bucket.
 
     Splits predictions into one file per chunk and kicks off
@@ -41,15 +43,12 @@ def trigger_export_pipeline(cloud_event: http.CloudEvent) -> None:
     Note: This function only runs once all output prediction files are written.
     Additionally, the climateiq_spatialize_chunk_predictions cloud function is
     only triggered once all prediction files per chunk are written since data
-    from neighboring chunks is required for spatializiation.
+    from neighboring chunks is required for spatialization.
 
     Args:
-        cloud_event: The CloudEvent representing the storage event.
+        object_name: The name of the blob written to the bucket.
     """
     start = time.time()
-
-    data = cloud_event.data
-    object_name = data["name"]
 
     # Extract components from the object name and determine the total number of
     # output prediction files.
@@ -99,6 +98,8 @@ def trigger_export_pipeline(cloud_event: http.CloudEvent) -> None:
         # written yet.
         return
 
+    _write_structured_log(f"[{object_name}] Starting process.", "DEBUG")
+
     # Split predictions into one file per chunk and output to GCS.
     output_filenames = []
     write_futures = []
@@ -117,17 +118,17 @@ def trigger_export_pipeline(cloud_event: http.CloudEvent) -> None:
                     )
                     write_futures.append(future)
 
-    futures.wait(write_futures)
-    print(
-        json.dumps(
-            dict(
-                severity="DEBUG",
-                message=(
-                    f"[{object_name}] Created {len(output_filenames)} files in "
-                    f"{time.time() - start} s."
-                ),
-            )
-        )
+    futures.wait(write_futures, return_when=futures.FIRST_EXCEPTION)
+    # If any exceptions were raised in a thread, calling result() will raise it here.
+    for future in write_futures:
+        future.result()
+
+    _write_structured_log(
+        (
+            f"[{object_name}] Created {len(output_filenames)} files in "
+            f"{time.time() - start} s."
+        ),
+        "DEBUG",
     )
 
     # Once all output files have been written, push tasks to Task Queue.
@@ -160,16 +161,19 @@ def trigger_export_pipeline(cloud_event: http.CloudEvent) -> None:
                     ),
                 )
             )
-    futures.wait(queue_futures)
+    futures.wait(queue_futures, return_when=futures.FIRST_EXCEPTION)
+    # If any exceptions were raised in a thread, calling result() will raise it here.
+    for future in write_futures:
+        future.result()
 
-    print(
-        json.dumps(
-            dict(
-                severity="DEBUG",
-                message=(
-                    f"[{object_name}] Triggered export pipeline for "
-                    f"{len(output_filenames)} chunks."
-                ),
-            )
-        )
+    _write_structured_log(
+        (
+            f"[{object_name}] Triggered export pipeline for "
+            f"{len(output_filenames)} chunks."
+        ),
+        "DEBUG",
     )
+
+
+if __name__ == "__main__":
+    trigger_export_pipeline(sys.argv[1])

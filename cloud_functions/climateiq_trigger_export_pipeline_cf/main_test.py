@@ -1,43 +1,20 @@
 import json
 from unittest import mock
 
-from cloudevents import http
 from google.cloud import storage, tasks_v2
 from google.cloud.storage import blob, client as gcs_client
 import pytest
 import main
 
 
-def _create_pubsub_event() -> http.CloudEvent:
-    attributes = {
-        "type": "google.cloud.storage.object.v1.finalized",
-        "source": "source",
-    }
-    data = {
-        "bucket": "climateiq-predictions",
-        "name": "id1/flood/v1.0/manhattan/extreme/prediction.results-3-of-5",
-    }
-    return http.CloudEvent(attributes, data)
-
-
 def test_trigger_export_pipeline_invalid_object_name():
-    attributes = {
-        "type": "google.cloud.storage.object.v1.finalized",
-        "source": "source",
-    }
-    data = {
-        "bucket": "climateiq-predictions",
-        "name": "invalid_name",  # Invalid object name
-    }
-    event = http.CloudEvent(attributes, data)
-
     expected_error = (
         "Invalid object name format. Expected format: '<id>/<prediction_type>/"
         "<model_id>/<study_area_name>/<scenario_id>/prediction.results-"
         "<file_number>-of-{number_of_files_generated}'\nActual name: 'invalid_name'"
     )
     with pytest.raises(ValueError, match=expected_error):
-        main.trigger_export_pipeline(event)
+        main.trigger_export_pipeline("invalid_name")
 
 
 @mock.patch.object(tasks_v2, "CloudTasksClient", autospec=True)
@@ -45,8 +22,6 @@ def test_trigger_export_pipeline_invalid_object_name():
 def test_trigger_export_pipeline_missing_prediction_files(
     mock_storage_client, mock_tasks_client
 ):
-    event = _create_pubsub_event()
-
     # Missing predictions for chunks 2 and 4.
     input_blobs = [
         storage.Blob(
@@ -64,7 +39,9 @@ def test_trigger_export_pipeline_missing_prediction_files(
     ]
     mock_storage_client().list_blobs.return_value = input_blobs
 
-    main.trigger_export_pipeline(event)
+    main.trigger_export_pipeline(
+        "id1/flood/v1.0/manhattan/extreme/prediction.results-3-of-5"
+    )
 
     mock_tasks_client().create_task.assert_not_called()
 
@@ -72,8 +49,6 @@ def test_trigger_export_pipeline_missing_prediction_files(
 @mock.patch.object(tasks_v2, "CloudTasksClient", autospec=True)
 @mock.patch.object(gcs_client, "Client", autospec=True)
 def test_trigger_export_pipeline(mock_storage_client, mock_tasks_client):
-    event = _create_pubsub_event()
-
     # Input blobs setup
     def create_mock_input_blob(name, start_chunk_id):
         chunk_id = (start_chunk_id - 1) * 2 + 1
@@ -108,7 +83,9 @@ def test_trigger_export_pipeline(mock_storage_client, mock_tasks_client):
         lambda name: mock_output_blobs.setdefault(name, mock.MagicMock())
     )
 
-    main.trigger_export_pipeline(event)
+    main.trigger_export_pipeline(
+        "id1/flood/v1.0/manhattan/extreme/prediction.results-3-of-5"
+    )
 
     # Confirm output blobs written
     for i in range(1, 11):
