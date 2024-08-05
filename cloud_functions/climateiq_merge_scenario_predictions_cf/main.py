@@ -1,12 +1,14 @@
 import collections
+from concurrent import futures
 import csv
 import itertools
+import json
 import re
 import os
+import sys
+import time
 
-from cloudevents import http
 from google.cloud import firestore, storage
-import functions_framework
 
 
 # Bucket name, where spatialized prediction outputs are stored.
@@ -28,10 +30,56 @@ STUDY_AREAS_COLLECTION_ID = "study_areas"
 MODEL_COLLECTION_ID = "models"
 # ID for the Runs sub-collection in Firestore.
 RUNS_COLLECTION_ID = "runs"
+# ID for the Locks sub-collection in Firestore.
+LOCKS_COLLECTION_ID = "locks"
+# Time in seconds for writes to GCS to time out.
+WRITE_TIMEOUT = 360
+# Max number of workers for the process pool. If the job is running out of CPU or
+# memory, lower this. Defaults to None i.e. use the default value for
+# ProcessPoolExecutor.
+MAX_PROCESSES = int(os.environ.get("MAX_PROCESSES", 0)) or None
 
 
-@functions_framework.cloud_event
-def merge_scenario_predictions(cloud_event: http.CloudEvent):
+def _write_structured_log(message: str, severity: str = "INFO"):
+    print(json.dumps(dict(message=message, severity=severity)), flush=True)
+
+
+def _set_lock(batch_id: str, prediction_type: str, model_id: str, study_area_name: str):
+    """Creates a Firestore entry to indicate a merge is happening."""
+    db = firestore.Client()
+    # Use hyphens to make calls to endpoints through URL simpler.
+    db.collection(LOCKS_COLLECTION_ID).document(
+        f"{batch_id}-{prediction_type}-{model_id}-{study_area_name}"
+    ).create({"running": True})
+
+
+def _get_lock(batch_id: str, prediction_type: str, model_id: str, study_area_name: str):
+    """Checks if a Firestore entry for this merge operation already exists."""
+    db = firestore.Client()
+    lock_doc = (
+        db.collection(LOCKS_COLLECTION_ID)
+        .document(f"{batch_id}-{prediction_type}-{model_id}-{study_area_name}")
+        .get()
+    )
+    return lock_doc.exists
+
+
+def _delete_lock(
+    batch_id: str,
+    prediction_type: str,
+    model_id: str,
+    study_area_name: str,
+):
+    """Deletes the lock."""
+    db = firestore.Client()
+    (
+        db.collection(LOCKS_COLLECTION_ID)
+        .document(f"{batch_id}-{prediction_type}-{model_id}-{study_area_name}")
+        .delete()
+    )
+
+
+def merge_scenario_predictions(object_name: str):
     """Merges predictions for each chunk across scenarios into single files per chunk.
 
     Triggered by writes to the input bucket. If the input bucket finally contains all
@@ -42,17 +90,18 @@ def merge_scenario_predictions(cloud_event: http.CloudEvent):
     missing files (raising errors will result in the cloud function retrying).
 
     Args:
-        cloud_event: The CloudEvent representing the storage event.
+        object_name: The name of the object which triggered this job.
     """
-    data = cloud_event.data
-    object_name = data["name"]
+    start = time.time()
+
     match = re.match(CHUNK_FILE_NAME_PATTERN, object_name)
     # Ignore files that don't match the pattern.
     if match is None:
-        print(
+        _write_structured_log(
             f"Invalid object name format. Expected format: '<id>/<prediction_type>/"
             f"<model_id>/<study_area_name>/<scenario_id>/<chunk_id>'\n"
-            f"Actual name: '{object_name}'"
+            f"Actual name: '{object_name}'",
+            "WARNING",
         )
         return
 
@@ -67,11 +116,10 @@ def merge_scenario_predictions(cloud_event: http.CloudEvent):
         scenario_ids = _get_expected_scenario_ids(batch_id, model_id)
         num_chunks = _get_expected_num_chunks(study_area_name)
     except ValueError as error:
-        print(error)
+        _write_structured_log(str(error), "ERROR")
         return
 
     storage_client = storage.Client()
-    input_bucket = storage_client.bucket(INPUT_BUCKET_NAME)
     blobs = storage_client.list_blobs(
         INPUT_BUCKET_NAME,
         prefix=f"{batch_id}/{prediction_type}/{model_id}/{study_area_name}",
@@ -84,10 +132,10 @@ def merge_scenario_predictions(cloud_event: http.CloudEvent):
             scenario_ids, num_chunks, chunk_ids_by_scenario_id
         )
     except ValueError as error:
-        print(error)
+        _write_structured_log(str(error), "ERROR")
         return
     if not files_complete:
-        print(
+        _write_structured_log(
             "Not all files ready for "
             f"{batch_id}/{prediction_type}/{model_id}/{study_area_name}"
         )
@@ -106,46 +154,69 @@ def merge_scenario_predictions(cloud_event: http.CloudEvent):
         key=str,
     )
     if len(chunk_ids) != num_chunks:
-        print("Chunk IDs should be the same across all scenarios.")
+        _write_structured_log(
+            f"[{batch_id}/{prediction_type}/{model_id}/{study_area_name}] "
+            "Chunk IDs should be the same across all scenarios.",
+            "ERROR",
+        )
         return
 
-    output_bucket = storage_client.bucket(OUTPUT_BUCKET_NAME)
-    for chunk_id in chunk_ids:
-        output_file_name = (
-            f"{batch_id}/{prediction_type}/{model_id}/{study_area_name}/{chunk_id}.csv"
+    _write_structured_log(
+        f"[{batch_id}/{prediction_type}/{model_id}/{study_area_name}] Starting merge.",
+        "DEBUG",
+    )
+
+    if _get_lock(batch_id, prediction_type, model_id, study_area_name):
+        _write_structured_log(
+            f"[{batch_id}/{prediction_type}/{model_id}/{study_area_name}] "
+            "Merge already running. Terminating this process.",
+            "WARNING",
         )
-        blob_to_write = output_bucket.blob(output_file_name)
-        with blob_to_write.open("w") as fd:
-            # Open the blob and start writing a CSV file with the headers
-            # cell_code,scenario_0,scenario_1...
-            writer = csv.DictWriter(fd, fieldnames=["cell_code"] + scenario_ids)
-            writer.writeheader()
-            predictions_by_cell_code: dict[str, dict] = collections.defaultdict(dict)
-            for scenario_id in scenario_ids:
-                object_name = (
-                    f"{batch_id}/{prediction_type}/{model_id}/"
-                    f"{study_area_name}/{scenario_id}/{chunk_id}.csv"
-                )
-                try:
-                    rows = _get_file_content(input_bucket, object_name)
-                except ValueError as error:
-                    print(f"Not found: {error}")
-                    return
-                for row in rows:
-                    predictions_by_cell_code[row["h3_index"]][scenario_id] = row[
-                        "prediction"
-                    ]
-            for cell_code, predictions in predictions_by_cell_code.items():
-                missing_scenario_ids = set(scenario_ids) - set(predictions.keys())
-                if missing_scenario_ids:
-                    print(
-                        f"Not found: Missing predictions for {cell_code} for "
-                        f"{', '.join(missing_scenario_ids)}."
-                    )
-                    return
-                predictions["cell_code"] = cell_code
-                # Output CSV will have the headers: cell_code,scenario_0,scenario_1...
-                writer.writerow(predictions)
+        return
+    _set_lock(batch_id, prediction_type, model_id, study_area_name)
+
+    max_chunks_per_process = max(
+        int(num_chunks / max(((os.cpu_count() or 2) - 1), 1)), 1
+    )
+    subset_futures = []
+    with futures.ProcessPoolExecutor(max_workers=MAX_PROCESSES) as executor:
+        for i in range(0, num_chunks, max_chunks_per_process):
+            future = executor.submit(
+                _merge_chunk_set,
+                batch_id,
+                prediction_type,
+                model_id,
+                study_area_name,
+                scenario_ids,
+                chunk_ids[i : i + max_chunks_per_process],
+            )
+            subset_futures.append(future)
+    futures.wait(subset_futures, return_when=futures.FIRST_EXCEPTION)
+
+    for future in subset_futures:
+        # Trigger raising any errors.
+        try:
+            future.result()
+        # If it's a ValueError, then it's non-recoverable (e.g. file doesn't exist) and
+        # we don't want to raise an actual error. All other error types should be
+        # raised.
+        except ValueError as e:
+            _delete_lock(batch_id, prediction_type, model_id, study_area_name)
+            _write_structured_log(str(e), "ERROR")
+            return
+        except:  # noqa: E722
+            _delete_lock(batch_id, prediction_type, model_id, study_area_name)
+            raise
+
+    _delete_lock(batch_id, prediction_type, model_id, study_area_name)
+
+    _write_structured_log(
+        f"[{batch_id}/{prediction_type}/{model_id}/{study_area_name}] Wrote "
+        f"{len(chunk_ids)} files in {time.time() - start} s.",
+        "DEBUG",
+    )
+
+    return
 
 
 def _get_expected_scenario_ids(batch_id: str, model_id: str) -> list[str]:
@@ -209,8 +280,10 @@ def _files_complete(
         expected_num_chunks: Number of chunks per scenario.
         chunks_by_scenario_id: A Mapping of scenario_id to Iterable of chunk_ids derived
             from the filenames of existing files in GCS.
+
     Returns:
         True if the files are all available in GCS.
+
     Raises:
         ValueError: If there are more scenario_ids or chunk_ids than expected found in
             the GCS blobs.
@@ -243,8 +316,10 @@ def _get_file_content(bucket: storage.Bucket, object_name: str) -> list[dict]:
     Args:
         bucket: The GCS bucket the Blob is in.
         object_name: The name of the Blob.
+
     Returns:
         Blob contents as a list of dict rows.
+
     Raises:
         ValueError: If the Blob doesn't exist.
     """
@@ -255,3 +330,96 @@ def _get_file_content(bucket: storage.Bucket, object_name: str) -> list[dict]:
         raise ValueError(f"Missing predictions for {object_name}")
     with blob.open() as fd:
         return list(csv.DictReader(fd))
+
+
+def _merge_chunk_set(
+    batch_id: str,
+    prediction_type: str,
+    model_id: str,
+    study_area_name: str,
+    scenario_ids: list[str],
+    chunk_ids: list[str],
+):
+    """Kicks off merge operations for a set of chunks. Called in subprocess."""
+    # Re-initialize the bucket here because this is called in process.
+    input_bucket = storage.Client().bucket(INPUT_BUCKET_NAME)
+    output_bucket = storage.Client().bucket(OUTPUT_BUCKET_NAME)
+    write_futures = []
+    with futures.ThreadPoolExecutor() as executor:
+        for chunk_id in chunk_ids:
+            write_futures.append(
+                executor.submit(
+                    _merge_single_chunk,
+                    batch_id,
+                    prediction_type,
+                    model_id,
+                    study_area_name,
+                    scenario_ids,
+                    chunk_id,
+                    input_bucket,
+                    output_bucket,
+                )
+            )
+    futures.wait(write_futures, return_when=futures.FIRST_EXCEPTION)
+    # Trigger raising any errors.
+    for future in write_futures:
+        future.result()
+
+
+def _merge_single_chunk(
+    batch_id: str,
+    prediction_type: str,
+    model_id: str,
+    study_area_name: str,
+    scenario_ids: list[str],
+    chunk_id: str,
+    input_bucket: storage.Bucket,
+    output_bucket: storage.Bucket,
+):
+    """Reads data across scenarios and writes merged file for a single chunk."""
+    read_futures = []
+    with futures.ThreadPoolExecutor() as executor:
+        for scenario_id in scenario_ids:
+            object_name = (
+                f"{batch_id}/{prediction_type}/{model_id}/{study_area_name}/"
+                f"{scenario_id}/{chunk_id}.csv"
+            )
+            future = executor.submit(_get_file_content, input_bucket, object_name)
+            read_futures.append((scenario_id, future))
+    futures.wait(
+        [future for _, future in read_futures], return_when=futures.FIRST_EXCEPTION
+    )
+
+    predictions_by_cell_code: dict[str, dict] = collections.defaultdict(dict)
+    for scenario_id, future in read_futures:
+        for row in future.result():
+            predictions_by_cell_code[row["h3_index"]][scenario_id] = row["prediction"]
+
+    output_file_name = (
+        f"{batch_id}/{prediction_type}/{model_id}/{study_area_name}/{chunk_id}.csv"
+    )
+    blob_to_write = output_bucket.blob(output_file_name)
+    with blob_to_write.open(
+        "w",
+        timeout=WRITE_TIMEOUT,
+        content_type="text/csv",
+        retry=storage.retry.DEFAULT_RETRY,
+    ) as fd:
+        # Open the blob and start writing a CSV file with the headers
+        # cell_code,scenario_0,scenario_1...
+        writer = csv.DictWriter(fd, fieldnames=["cell_code"] + scenario_ids)
+        writer.writeheader()
+        for cell_code, predictions in predictions_by_cell_code.items():
+            missing_scenario_ids = set(scenario_ids) - set(predictions.keys())
+            if missing_scenario_ids:
+                raise ValueError(
+                    f"Not found: Missing predictions for {cell_code} for "
+                    f"{', '.join(missing_scenario_ids)}."
+                )
+            predictions["cell_code"] = cell_code
+            # Output CSV will have the headers: cell_code,scenario_0,scenario_1...
+            writer.writerow(predictions)
+
+
+if __name__ == "__main__":
+    merge_scenario_predictions(sys.argv[1])

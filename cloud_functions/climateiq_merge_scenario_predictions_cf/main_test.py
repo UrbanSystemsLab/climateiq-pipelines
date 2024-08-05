@@ -2,29 +2,26 @@ import collections
 import contextlib
 import io
 import tempfile
-import typing
 from unittest import mock
 
-from cloudevents import http
 from google.cloud import firestore, storage
+import pytest
+from typing import Any
 
 import main
 
 
-def _create_pubsub_event() -> http.CloudEvent:
-    attributes = {
-        "type": "google.cloud.storage.object.v1.finalized",
-        "source": "source",
-    }
-    data = {
-        "bucket": "climateiq-predictions",
-        "name": "batch/flood/model/nyc/scenario0/chunk0.csv",
-    }
-    return http.CloudEvent(attributes, data)
+@contextlib.contextmanager
+def assert_prints(message: str):
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        yield
+    escaped_message = message.replace("'", "'").replace('"', '\\"').replace("\n", "\\n")
+    assert escaped_message in output.getvalue()
 
 
 def _create_mock_doc_snap(
-    items: collections.abc.Mapping[str, typing.Any] | None = None, exists: bool = True
+    items: collections.abc.Mapping[str, Any] | None = None, exists: bool = True
 ):
     return mock.MagicMock(exists=exists, get=(items or {}).get)
 
@@ -32,23 +29,34 @@ def _create_mock_doc_snap(
 def _create_firestore_entries(
     mock_firestore_client: mock.MagicMock, scenario_ids: list[str], num_chunks: int
 ):
-    (
-        mock_firestore_client()
-        .collection()
-        .document()
-        .collection()
-        .document()
-        .get.return_value
-    ) = _create_mock_doc_snap({"scenario_ids": scenario_ids})
+    mock_locks = mock.create_autospec(firestore.CollectionReference)
+    mock_locks.document().get.return_value = mock.MagicMock(exists=False)
 
-    mock_firestore_client().collection().document().get.return_value = (
-        _create_mock_doc_snap(
-            {
-                "chunk_x_count": num_chunks,
-                "chunk_y_count": 1,
-            }
-        )
+    mock_models = mock.create_autospec(firestore.CollectionReference)
+    mock_models.document().collection().document().get.return_value = (
+        _create_mock_doc_snap({"scenario_ids": scenario_ids})
     )
+
+    mock_study_areas = mock.create_autospec(firestore.CollectionReference)
+    mock_study_areas.document().get.return_value = _create_mock_doc_snap(
+        {
+            "chunk_x_count": num_chunks,
+            "chunk_y_count": 1,
+        }
+    )
+
+    def _get_collection_by_name(name: str):
+        match name:
+            case main.LOCKS_COLLECTION_ID:
+                return mock_locks
+            case main.MODEL_COLLECTION_ID:
+                return mock_models
+            case main.STUDY_AREAS_COLLECTION_ID:
+                return mock_study_areas
+
+    mock_firestore_client().collection.side_effect = _get_collection_by_name
+
+    return (mock_locks, mock_models, mock_study_areas)
 
 
 def _create_chunk_file(
@@ -67,7 +75,11 @@ def _create_mock_blob(name: str, tmp_file_path: str | None = None) -> mock.Magic
     blob = mock.create_autospec(storage.Blob, instance=True)
     blob.name = name
     if tmp_file_path:
-        blob.open.side_effect = lambda mode="r+": open(tmp_file_path, mode=mode)
+        blob.open.side_effect = (
+            lambda mode="r+", timeout=None, content_type=None, retry=None: open(
+                tmp_file_path, mode=mode
+            )
+        )
         blob.exists.return_value = True
     else:
         blob.exists.return_value = False
@@ -93,7 +105,9 @@ def _create_mock_bucket(
 def test_merge_scenario_predictions(
     mock_firestore_client, mock_storage_client, tmp_path
 ):
-    _create_firestore_entries(mock_firestore_client, ["scenario0", "scenario1"], 2)
+    mock_locks_collection, _, _ = _create_firestore_entries(
+        mock_firestore_client, ["scenario0", "scenario1"], 2
+    )
 
     input_files = {
         "batch/flood/model/nyc/scenario0/chunk0.csv": _create_chunk_file(
@@ -130,7 +144,10 @@ def test_merge_scenario_predictions(
         if name.startswith(prefix)
     ]
 
-    main.merge_scenario_predictions(_create_pubsub_event())
+    main.merge_scenario_predictions("batch/flood/model/nyc/scenario0/chunk0.csv")
+
+    assert mock_locks_collection.document().create.called
+    assert mock_locks_collection.document().delete.called
 
     expected_chunk0_contents = (
         "cell_code,scenario0,scenario1\n" "h300,0.0,1.0\n" "h301,0.01,1.01\n"
@@ -164,10 +181,8 @@ def test_merge_scenario_predictions_files_incomplete_missing_scenario(
         if name.startswith(prefix)
     ]
 
-    output = io.StringIO()
-    with contextlib.redirect_stdout(output):
-        main.merge_scenario_predictions(_create_pubsub_event())
-    assert "Not all files ready" in output.getvalue()
+    with assert_prints("Not all files ready"):
+        main.merge_scenario_predictions("batch/flood/model/nyc/scenario0/chunk0.csv")
 
 
 @mock.patch.object(storage, "Client", autospec=True)
@@ -193,10 +208,8 @@ def test_merge_scenario_predictions_files_incomplete_missing_chunk(
         if name.startswith(prefix)
     ]
 
-    output = io.StringIO()
-    with contextlib.redirect_stdout(output):
-        main.merge_scenario_predictions(_create_pubsub_event())
-    assert "Not all files ready" in output.getvalue()
+    with assert_prints("Not all files ready"):
+        main.merge_scenario_predictions("batch/flood/model/nyc/scenario0/chunk0.csv")
 
 
 @mock.patch.object(firestore, "Client", autospec=True)
@@ -212,10 +225,8 @@ def test_merge_scenario_predictions_missing_run_metadata_prints_error(
         .get.return_value
     ) = _create_mock_doc_snap(exists=False)
 
-    output = io.StringIO()
-    with contextlib.redirect_stdout(output):
-        main.merge_scenario_predictions(_create_pubsub_event())
-    assert "Metadata for run" in output.getvalue()
+    with assert_prints("Metadata for run"):
+        main.merge_scenario_predictions("batch/flood/model/nyc/scenario0/chunk0.csv")
 
 
 @mock.patch.object(firestore, "Client", autospec=True)
@@ -226,10 +237,8 @@ def test_merge_scenario_predictions_missing_study_area_metadata_prints_error(
         _create_mock_doc_snap(exists=False)
     )
 
-    output = io.StringIO()
-    with contextlib.redirect_stdout(output):
-        main.merge_scenario_predictions(_create_pubsub_event())
-    assert "Metadata for study_area" in output.getvalue()
+    with assert_prints("Metadata for study_area"):
+        main.merge_scenario_predictions("batch/flood/model/nyc/scenario0/chunk0.csv")
 
 
 @mock.patch.object(storage, "Client", autospec=True)
@@ -265,10 +274,8 @@ def test_merge_scenario_predictions_too_many_scenarios_prints_error(
         if name.startswith(prefix)
     ]
 
-    output = io.StringIO()
-    with contextlib.redirect_stdout(output):
-        main.merge_scenario_predictions(_create_pubsub_event())
-    assert "more scenario_ids" in output.getvalue()
+    with assert_prints("more scenario_ids"):
+        main.merge_scenario_predictions("batch/flood/model/nyc/scenario0/chunk0.csv")
 
 
 @mock.patch.object(storage, "Client", autospec=True)
@@ -301,10 +308,8 @@ def test_merge_scenario_predictions_too_many_chunks_prints_error(
         if name.startswith(prefix)
     ]
 
-    output = io.StringIO()
-    with contextlib.redirect_stdout(output):
-        main.merge_scenario_predictions(_create_pubsub_event())
-    assert "more chunks" in output.getvalue()
+    with assert_prints("more chunks"):
+        main.merge_scenario_predictions("batch/flood/model/nyc/scenario0/chunk0.csv")
 
 
 @mock.patch.object(storage, "Client", autospec=True)
@@ -334,10 +339,8 @@ def test_merge_scenario_predictions_inconsistent_chunk_ids_prints_error(
         if name.startswith(prefix)
     ]
 
-    output = io.StringIO()
-    with contextlib.redirect_stdout(output):
-        main.merge_scenario_predictions(_create_pubsub_event())
-    assert "Chunk IDs should be the same" in output.getvalue()
+    with assert_prints("Chunk IDs should be the same"):
+        main.merge_scenario_predictions("batch/flood/model/nyc/scenario0/chunk0.csv")
 
 
 @mock.patch.object(storage, "Client", autospec=True)
@@ -377,12 +380,10 @@ def test_merge_scenario_predictions_missing_chunk_prints_error(
         if name.startswith(prefix)
     ]
     expected_error = (
-        "Not found: Missing predictions for batch/flood/model/nyc/scenario1/chunk1.csv"
+        "Missing predictions for batch/flood/model/nyc/scenario1/chunk1.csv"
     )
-    output = io.StringIO()
-    with contextlib.redirect_stdout(output):
-        main.merge_scenario_predictions(_create_pubsub_event())
-    assert expected_error in output.getvalue()
+    with assert_prints(expected_error):
+        main.merge_scenario_predictions("batch/flood/model/nyc/scenario0/chunk0.csv")
 
 
 @mock.patch.object(storage, "Client", autospec=True)
@@ -422,7 +423,88 @@ def test_merge_scenario_predictions_missing_scenarios_for_cell_code_prints_error
         if name.startswith(prefix)
     ]
     expected_error = "Not found: Missing predictions for h312 for scenario0."
-    output = io.StringIO()
-    with contextlib.redirect_stdout(output):
-        main.merge_scenario_predictions(_create_pubsub_event())
-    assert expected_error in output.getvalue()
+    with assert_prints(expected_error):
+        main.merge_scenario_predictions("batch/flood/model/nyc/scenario0/chunk0.csv")
+
+
+@mock.patch.object(storage, "Client", autospec=True)
+@mock.patch.object(firestore, "Client", autospec=True)
+def test_merge_scenario_predictions_non_value_error_raises_error(
+    mock_firestore_client, mock_storage_client, tmp_path
+):
+    mock_locks_collection, _, _ = _create_firestore_entries(
+        mock_firestore_client, ["scenario0", "scenario1"], 2
+    )
+    input_files = {
+        "batch/flood/model/nyc/scenario0/chunk0.csv": _create_chunk_file(
+            {"h300": 0.00, "h301": 0.01}, tmp_path
+        ),
+        "batch/flood/model/nyc/scenario0/chunk1.csv": _create_chunk_file(
+            {"h310": 0.10, "h311": 0.11}, tmp_path
+        ),
+        "batch/flood/model/nyc/scenario1/chunk0.csv": _create_chunk_file(
+            {"h300": 1.00, "h301": 1.01}, tmp_path
+        ),
+        "batch/flood/model/nyc/scenario1/chunk1.csv": _create_chunk_file(
+            {"h310": 1.10, "h311": 1.11}, tmp_path
+        ),
+    }
+    input_bucket = _create_mock_bucket(input_files)
+
+    output_bucket = _create_mock_bucket({})
+    output_bucket.blob.side_effect = Exception("should raise not print")
+
+    mock_storage_client().bucket.side_effect = lambda bucket_name: (
+        input_bucket if bucket_name == main.INPUT_BUCKET_NAME else output_bucket
+    )
+    mock_storage_client().list_blobs.side_effect = lambda _, prefix: [
+        _create_mock_blob(name, tmp_file_path)
+        for name, tmp_file_path in input_files.items()
+        if name.startswith(prefix)
+    ]
+    with pytest.raises(Exception, match="should raise not print"):
+        main.merge_scenario_predictions("batch/flood/model/nyc/scenario0/chunk0.csv")
+
+    assert mock_locks_collection.document().create.called
+    assert mock_locks_collection.document().delete.called
+
+
+@mock.patch.object(storage, "Client", autospec=True)
+@mock.patch.object(firestore, "Client", autospec=True)
+def test_merge_scenario_predictions_lock_exists_doesnt_proceed(
+    mock_firestore_client, mock_storage_client, tmp_path
+):
+    mock_locks, _, _ = _create_firestore_entries(
+        mock_firestore_client, ["scenario0", "scenario1"], 2
+    )
+    mock_locks.document().get.return_value = mock.MagicMock(exists=True)
+
+    input_files = {
+        "batch/flood/model/nyc/scenario0/chunk0.csv": _create_chunk_file(
+            {"h300": 0.00, "h301": 0.01}, tmp_path
+        ),
+        "batch/flood/model/nyc/scenario0/chunk1.csv": _create_chunk_file(
+            {"h310": 0.10, "h311": 0.11}, tmp_path
+        ),
+        "batch/flood/model/nyc/scenario1/chunk0.csv": _create_chunk_file(
+            {"h300": 1.00, "h301": 1.01}, tmp_path
+        ),
+        "batch/flood/model/nyc/scenario1/chunk1.csv": _create_chunk_file(
+            {"h310": 1.10, "h311": 1.11}, tmp_path
+        ),
+    }
+    input_bucket = _create_mock_bucket(input_files)
+
+    output_bucket = _create_mock_bucket({})
+
+    mock_storage_client().bucket.side_effect = lambda bucket_name: (
+        input_bucket if bucket_name == main.INPUT_BUCKET_NAME else output_bucket
+    )
+    mock_storage_client().list_blobs.side_effect = lambda _, prefix: [
+        _create_mock_blob(name, tmp_file_path)
+        for name, tmp_file_path in input_files.items()
+        if name.startswith(prefix)
+    ]
+    expected_error = "already running. Terminating"
+    with assert_prints(expected_error):
+        main.merge_scenario_predictions("batch/flood/model/nyc/scenario0/chunk0.csv")
