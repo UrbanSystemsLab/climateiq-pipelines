@@ -7,6 +7,7 @@ import time
 
 from google.cloud import tasks_v2
 from google.cloud.storage import client as gcs_client, retry
+from google.protobuf import duration_pb2
 
 INPUT_BUCKET_NAME = os.environ.get("BUCKET_PREFIX", "") + "climateiq-predictions"
 OUTPUT_BUCKET_NAME = os.environ.get("BUCKET_PREFIX", "") + "climateiq-chunk-predictions"
@@ -20,7 +21,8 @@ SPATIALIZE_CF_URL = (
 SPATIALIZE_CF_SERVICE_ACCOUNT_EMAIL = (
     f"gcf-spatialize-predictions-sa@{CLIMATEIQ_PROJECT_ID}.iam.gserviceaccount.com"
 )
-SPATIALIZE_CF_QUEUE = "spatialize-chunk-predictions-queue"
+SPATIALIZE_CF_QUEUE = "spatialize-chunk-predictions-q"
+SPATIALIZE_TASK_TIME_LIMIT_S = 1800
 
 
 def _write_structured_log(message: str, severity: str = "INFO"):
@@ -146,6 +148,9 @@ def trigger_export_pipeline(object_name: str) -> None:
                         audience=SPATIALIZE_CF_URL,
                     ),
                     body=json.dumps({"object_name": output_filename}).encode("utf-8"),
+                ),
+                dispatch_deadline=duration_pb2.Duration().FromSeconds(
+                    SPATIALIZE_TASK_TIME_LIMIT_S
                 ),
             )
             queue_futures.append(
