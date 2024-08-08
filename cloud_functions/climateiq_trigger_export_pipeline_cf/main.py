@@ -11,8 +11,7 @@ from google.protobuf import duration_pb2
 
 INPUT_BUCKET_NAME = os.environ.get("BUCKET_PREFIX", "") + "climateiq-predictions"
 OUTPUT_BUCKET_NAME = os.environ.get("BUCKET_PREFIX", "") + "climateiq-chunk-predictions"
-CLIMATEIQ_PROJECT_ID = "climateiq-" + os.environ.get("BUCKET_PREFIX", "").rstrip("-")
-CLIMATEIQ_EXPORT_PIPELINE_TOPIC_ID = "climateiq-spatialize-and-export-predictions"
+CLIMATEIQ_PROJECT_ID = ("climateiq-" + os.environ.get("BUCKET_PREFIX", "")).rstrip("-")
 REGION = "us-central1"
 SPATIALIZE_CF_URL = (
     f"https://{REGION}-{CLIMATEIQ_PROJECT_ID}.cloudfunctions.net"
