@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<AssignMessage name="AM-CleanResponseHeaders">
+  <Remove>
+    <Headers/>
+  </Remove>
+  <Set>
+    <Headers>
+      <Header name="apiproxy">{apiproxy.name} r{apiproxy.revision} {proxy.name}</Header>
+    </Headers>
+  </Set>
+</AssignMessage>

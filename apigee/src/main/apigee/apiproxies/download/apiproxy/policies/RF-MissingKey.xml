@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<RaiseFault name="RF-MissingKey">
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+  <FaultResponse>
+    <Set>
+      <Payload contentType="application/json">{
+  "error" : {
+    "code" : 400.02,
+    "message" : "invalid request: have you loaded the service account key?"
+  }
+}
+</Payload>
+      <StatusCode>400</StatusCode>
+      <ReasonPhrase>Bad Request</ReasonPhrase>
+    </Set>
+  </FaultResponse>
+</RaiseFault>

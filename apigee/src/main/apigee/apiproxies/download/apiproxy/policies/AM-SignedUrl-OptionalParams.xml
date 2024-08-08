@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<AssignMessage name="AM-SignedUrl-OptionalParams">
+  <AssignVariable>
+    <Name>signedurl_verb</Name>
+    <Value>GET</Value>
+  </AssignVariable>
+  <AssignVariable>
+    <Name>signedurl_expiry</Name>
+    <Value>5m</Value>
+  </AssignVariable>
+</AssignMessage>

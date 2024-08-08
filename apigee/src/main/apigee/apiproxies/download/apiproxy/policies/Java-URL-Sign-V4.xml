@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<JavaCallout name="Java-URL-Sign-V4">
+  <Properties>
+    <Property name="service-account-key">{private.service_account_key_json}</Property>
+    <Property name="verb">{signedurl_verb}</Property>
+    <Property name="bucket">{request.queryparam.bucket}</Property>
+    <Property name="object">{request.queryparam.object}</Property>
+    <Property name="expires-in">{signedurl_expiry}</Property>
+  </Properties>
+  <ClassName>com.google.apigee.callouts.rsa.V4SignedUrlCallout</ClassName>
+  <ResourceURL>java://apigee-google-signed-url-20210311.jar</ResourceURL>
+</JavaCallout>

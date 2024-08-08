@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<AssignMessage name="AM-Response">
+  <Set>
+    <Headers>
+      <Header name="Location">{sign_signedurl}</Header>
+    </Headers>
+    <StatusCode>307</StatusCode>
+  </Set>
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+  <AssignTo createNew="false" transport="http" type="response"/>
+</AssignMessage>

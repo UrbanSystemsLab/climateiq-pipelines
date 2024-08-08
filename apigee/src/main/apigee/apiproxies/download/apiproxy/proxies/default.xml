@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ProxyEndpoint name="default">
+  <FaultRules/>
+  <DefaultFaultRule name="fault-rule">
+    <Step>
+      <Name>AM-InjectProxyVersionHeader</Name>
+    </Step>
+    <AlwaysEnforce/>
+  </DefaultFaultRule>
+  <PreFlow name="PreFlow">
+    <Request>
+      <Step>
+        <Name>FC-Authentication</Name>
+      </Step>
+    </Request>
+    <Response>
+      <Step>
+        <Name>AM-CleanResponseHeaders</Name>
+      </Step>
+    </Response>
+  </PreFlow>
+  <PostFlow name="PostFlow">
+    <Response>
+      <Step>
+        <Name>AM-InjectProxyVersionHeader</Name>
+      </Step>
+    </Response>
+  </PostFlow>
+  <Flows>
+    <Flow name="version4-real">
+      <!-- this flow uses a service account credential loaded from the KVM . -->
+      <Request>
+        <Step>
+          <Name>RF-InvalidRequest</Name>
+          <Condition>request.queryparam.bucket = null</Condition>
+        </Step>
+        <Step>
+          <Name>RF-InvalidRequest</Name>
+          <Condition>request.queryparam.object = null</Condition>
+        </Step>
+        <Step>
+          <Name>KVM-Get-ServiceAccountKey</Name>
+        </Step>
+        <Step>
+          <Name>RF-MissingKey</Name>
+          <Condition>private.service_account_key_json = null</Condition>
+        </Step>
+        <Step>
+          <Name>AM-SignedUrl-OptionalParams</Name>
+        </Step>
+        <Step>
+          <Name>Java-URL-Sign-V4</Name>
+        </Step>
+      </Request>
+      <Response>
+        <Step>
+          <Name>AM-Response</Name>
+        </Step>
+      </Response>
+      <Condition>request.verb = "GET"</Condition>
+    </Flow>
+    <Flow name="unknown request">
+      <Request>
+        <Step>
+          <Name>RF-UnknownRequest</Name>
+        </Step>
+      </Request>
+      <Response>
+      </Response>
+    </Flow>
+  </Flows>
+  <RouteRule name="NoRouteRule"/>
+  <HTTPProxyConnection>
+    <BasePath>/download</BasePath>
+    <Properties/>
+    <VirtualHost>default</VirtualHost>
+  </HTTPProxyConnection>
+</ProxyEndpoint>

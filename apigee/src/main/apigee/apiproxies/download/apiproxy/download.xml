@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<APIProxy revision="6" name="download">
+  <DisplayName>download</DisplayName>
+  <Description/>
+  <CreatedAt>1723129832596</CreatedAt>
+  <LastModifiedAt>1723129832596</LastModifiedAt>
+  <BasePaths>/download</BasePaths>
+  <Policies>
+    <Policy>RF-InvalidRequest</Policy>
+    <Policy>RF-MissingKey</Policy>
+    <Policy>Java-URL-Sign-V4</Policy>
+    <Policy>AM-Response</Policy>
+    <Policy>RF-UnknownRequest</Policy>
+    <Policy>AM-SignedUrl-OptionalParams</Policy>
+    <Policy>KVM-Get-ServiceAccountKey</Policy>
+    <Policy>AM-CleanResponseHeaders</Policy>
+    <Policy>AM-InjectProxyVersionHeader</Policy>
+    <Policy>FC-Authentication</Policy>
+  </Policies>
+  <ProxyEndpoints>
+    <ProxyEndpoint>default</ProxyEndpoint>
+  </ProxyEndpoints>
+  <Resources>
+    <Resource>java://apigee-google-signed-url-20210311.jar</Resource>
+    <Resource>java://javax.json-api-1.1.4.jar</Resource>
+    <Resource>java://javax.json-1.1.4.jar</Resource>
+  </Resources>
+</APIProxy>
