@@ -38,7 +38,12 @@ def export_to_aws(request: flask.Request) -> tuple[str, int]:
     )
 
     storage_client = storage.Client()
-    blobs_to_export = list(storage_client.list_blobs(GCS_BUCKET_NAME, prefix=prefix))
+    # Exclude directories from the blob listing.
+    blobs_to_export = [
+        blob
+        for blob in storage_client.list_blobs(GCS_BUCKET_NAME, prefix=prefix)
+        if not blob.name.endswith("/")
+    ]
 
     total_blobs = len(blobs_to_export)
 
