@@ -1,0 +1,6 @@
+google-cloud-storage
+netCDF4
+rasterio
+gcsfs
+affine
+numpy

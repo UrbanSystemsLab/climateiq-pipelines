@@ -1,0 +1,7 @@
+netCDF4
+wrf-python
+cartopy
+google-cloud-storage
+gcsfs
+matplotlib
+numpy
