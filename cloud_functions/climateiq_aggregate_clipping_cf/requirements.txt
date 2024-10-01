@@ -1,0 +1,7 @@
+google-cloud-storage
+rasterio
+geopandas
+numpy
+pandas
+flask  # For HTTP triggering
+shapely

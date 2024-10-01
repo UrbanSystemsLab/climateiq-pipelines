@@ -1,6 +1,0 @@
-pandas
-google-cloud-storage
-rasterio
-numpy
-h3
-shapely
